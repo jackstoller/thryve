@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS plants (
 -- Create import_sessions table for tracking plant identification progress
 CREATE TABLE IF NOT EXISTS import_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  status TEXT CHECK (status IN ('uploading', 'identifying', 'researching', 'confirming', 'completed', 'failed')) DEFAULT 'uploading',
+  status TEXT CHECK (status IN ('uploading', 'identifying', 'researching', 'comparing', 'confirming', 'completed', 'failed')) DEFAULT 'uploading',
   image_url TEXT,
   identified_species TEXT,
   scientific_name TEXT,

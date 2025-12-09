@@ -24,29 +24,36 @@ export interface ResearchSource {
   name: string
   url?: string
   recommendation: string
+  watering_frequency_days?: number
+  fertilizing_frequency_days?: number
+  sunlight_level?: "low" | "medium" | "bright" | "direct"
+  humidity_preference?: string
+  temperature_range?: string
+}
+
+export interface PlantSuggestion {
+  common_name: string
+  scientific_name: string
+  confidence: number
+  votes: number
 }
 
 export interface ImportSession {
   id: string
-  status: "uploading" | "identifying" | "researching" | "comparing" | "confirming" | "completed" | "failed"
+  status: "uploading" | "identifying" | "researching" | "comparing" | "confirming" | "completed" | "failed" | "needs_selection"
   image_url: string | null
+  plant_name: string | null
+  plant_location: string | null
   identified_species: string | null
   scientific_name: string | null
   confidence: number | null
+  suggestions: PlantSuggestion[] | null
   research_sources: ResearchSource[]
   care_requirements: CareRequirements | null
   error_message: string | null
   plant_id: string | null
   created_at: string
   updated_at: string
-  current_action?: string
-  partial_data?: Partial<{
-    identified_species: string
-    scientific_name: string
-    confidence: number
-    care_requirements: Partial<CareRequirements>
-    research_sources: ResearchSource[]
-  }>
 }
 
 export interface CareRequirements {
@@ -56,4 +63,13 @@ export interface CareRequirements {
   humidity_preference: string
   temperature_range: string
   care_notes: string
+}
+
+export interface CareHistoryItem {
+  id: string
+  plant_id: string
+  care_type: "water" | "fertilize"
+  performed_at: string
+  notes: string | null
+  created_at: string
 }

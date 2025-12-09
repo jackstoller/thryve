@@ -10,6 +10,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 })
     }
 
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      return NextResponse.json({ error: "File must be an image" }, { status: 400 })
+    }
+
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024
+    if (file.size > maxSize) {
+      return NextResponse.json({ error: "File size must be less than 10MB" }, { status: 400 })
+    }
+
     const blob = await put(`plants/${Date.now()}-${file.name}`, file, {
       access: "public",
     })
@@ -22,6 +33,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Upload error:", error)
-    return NextResponse.json({ error: "Upload failed" }, { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : "Upload failed"
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }

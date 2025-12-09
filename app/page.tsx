@@ -1,19 +1,21 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import useSWR, { mutate } from "swr"
 import { Header } from "@/components/header"
 import { PlantCard } from "@/components/plant-card"
 import { AddPlantModal } from "@/components/add-plant-modal"
 import { EditPlantModal } from "@/components/edit-plant-modal"
+import { ManualPlantForm, type ManualPlantData } from "@/components/manual-plant-form"
 import { ImportSidebar } from "@/components/import-sidebar"
 import { ScheduleView } from "@/components/schedule-view"
+import { DashboardOverview } from "@/components/dashboard-overview"
+import { PlantDetailDrawer } from "@/components/plant-detail-drawer"
+import { PlantGalleryFilters } from "@/components/plant-gallery-filters"
 import { Button } from "@/components/ui/button"
 import { Leaf, Plus, Loader2 } from "lucide-react"
 import type { Plant, ImportSession } from "@/lib/types"
 import { isPast, isToday } from "date-fns"
-import { experimental_useObject as useObject } from "@ai-sdk/react"
-import { z } from "zod"
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
@@ -24,106 +26,36 @@ const fetcher = async (url: string) => {
   return data
 }
 
-function getStreamingStatus(object: any): { status: ImportSession["status"]; currentAction: string } {
-  if (!object) {
-    return { status: "uploading", currentAction: "Preparing image..." }
-  }
-
-  const hasSpecies = !!object.identified_species
-  const hasScientificName = !!object.scientific_name
-  const hasCareRequirements = !!object.care_requirements
-  const hasSources = object.research_sources?.length > 0
-  const hasAllSources = object.research_sources?.length >= 3
-
-  if (!hasSpecies) {
-    return { status: "identifying", currentAction: "Analyzing plant features..." }
-  }
-
-  if (hasSpecies && !hasCareRequirements?.watering_frequency_days) {
-    return { status: "identifying", currentAction: `Identified as ${object.identified_species}, gathering details...` }
-  }
-
-  if (hasCareRequirements && !hasSources) {
-    return { status: "researching", currentAction: "Searching botanical databases..." }
-  }
-
-  if (hasSources && !hasAllSources) {
-    return {
-      status: "comparing",
-      currentAction: `Found ${object.research_sources.length} source${object.research_sources.length > 1 ? "s" : ""}, verifying care requirements...`,
-    }
-  }
-
-  if (hasAllSources) {
-    return { status: "comparing", currentAction: "Cross-referencing sources for accuracy..." }
-  }
-
-  return { status: "researching", currentAction: "Gathering care information..." }
-}
-
 export default function Home() {
-  const [view, setView] = useState<"grid" | "schedule">("grid")
+  const [view, setView] = useState<"grid" | "schedule" | "dashboard">("dashboard")
   const [addModalOpen, setAddModalOpen] = useState(false)
+  const [manualFormOpen, setManualFormOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editingPlant, setEditingPlant] = useState<Plant | null>(null)
   const [importSidebarOpen, setImportSidebarOpen] = useState(false)
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  const [correctingSession, setCorrectingSession] = useState<ImportSession | null>(null)
+  const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null)
+  const [plantDetailOpen, setPlantDetailOpen] = useState(false)
+  
+  // Filters
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([])
+  const [selectedSpecies, setSelectedSpecies] = useState<string[]>([])
 
   const { data: plants = [], isLoading: plantsLoading } = useSWR<Plant[]>("/api/plants", fetcher)
-  const { data: sessions = [], isLoading: sessionsLoading } = useSWR<ImportSession[]>("/api/import-sessions", fetcher)
-
-  const {
-    object,
-    submit,
-    isLoading: isIdentifying,
-  } = useObject({
-    api: "/api/identify-plant",
-    schema: plantIdentificationSchema,
-    onFinish: async ({ object }) => {
-      if (object && currentSessionId) {
-        await fetch(`/api/import-sessions/${currentSessionId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            status: "confirming",
-            identified_species: object.identified_species,
-            scientific_name: object.scientific_name,
-            confidence: object.confidence,
-            care_requirements: object.care_requirements,
-            research_sources: object.research_sources,
-          }),
-        })
-        mutate("/api/import-sessions")
-        setExpandedSessionId(currentSessionId)
+  const { data: sessions = [], isLoading: sessionsLoading } = useSWR<ImportSession[]>("/api/import-sessions", fetcher, {
+    refreshInterval: 2000, // Poll every 2 seconds for active sessions
+    onSuccess: (data) => {
+      // Refresh plants list when a session completes
+      const hasCompleted = data.some((s) => s.status === "completed")
+      if (hasCompleted) {
+        mutate("/api/plants")
       }
     },
   })
 
-  const streamingInfo = useMemo(() => getStreamingStatus(object), [object])
-
-  const enhancedSessions = useMemo(() => {
-    return sessions.map((session) => {
-      if (session.id === currentSessionId && isIdentifying && object) {
-        return {
-          ...session,
-          status: streamingInfo.status,
-          current_action: streamingInfo.currentAction,
-          partial_data: {
-            identified_species: object.identified_species,
-            scientific_name: object.scientific_name,
-            confidence: object.confidence,
-            care_requirements: object.care_requirements,
-            research_sources: object.research_sources || [],
-          },
-        }
-      }
-      return session
-    })
-  }, [sessions, currentSessionId, isIdentifying, object, streamingInfo])
-
-  const activeSessions = enhancedSessions.filter((s) => s.status !== "completed")
+  const activeSessions = sessions.filter((s) => s.status !== "completed")
   const urgentCount = plants.filter((p) => {
     const needsWater =
       p.next_water_date && (isPast(new Date(p.next_water_date)) || isToday(new Date(p.next_water_date)))
@@ -132,45 +64,134 @@ export default function Home() {
     return needsWater || needsFertilizer
   }).length
 
-  const handleImageSelected = async (file: File) => {
-    setIsUploading(true)
-
+  const handleImageSelected = async (file: File, name: string, location: string) => {
     try {
+      // Upload the image
       const formData = new FormData()
       formData.append("file", file)
       const uploadRes = await fetch("/api/upload", { method: "POST", body: formData })
+      
+      if (!uploadRes.ok) {
+        const error = await uploadRes.json()
+        throw new Error(error.error || "Upload failed")
+      }
+      
       const { url } = await uploadRes.json()
 
+      // Create import session with name and location
       const sessionRes = await fetch("/api/import-sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "uploading", image_url: url }),
+        body: JSON.stringify({ 
+          status: "uploading", 
+          image_url: url,
+          plant_name: name,
+          plant_location: location
+        }),
       })
+
+      if (!sessionRes.ok) {
+        const error = await sessionRes.json()
+        throw new Error(error.error || "Failed to create import session")
+      }
+
       const session = await sessionRes.json()
 
-      setCurrentSessionId(session.id)
       setExpandedSessionId(session.id)
-      setAddModalOpen(false)
       setImportSidebarOpen(true)
 
       mutate("/api/import-sessions")
 
-      submit({ imageUrl: url, sessionId: session.id })
+      // Start the identification process
+      const identifyRes = await fetch("/api/identify-plant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl: url, sessionId: session.id }),
+      })
+
+      if (!identifyRes.ok) {
+        const error = await identifyRes.json()
+        // Update session with error
+        await fetch(`/api/import-sessions/${session.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: "failed",
+            error_message: error.error || "Failed to start identification",
+          }),
+        })
+      }
+
+      // Trigger immediate refresh
+      mutate("/api/import-sessions")
     } catch (error) {
       console.error("Failed to process image:", error)
-    } finally {
-      setIsUploading(false)
+      alert(error instanceof Error ? error.message : "Failed to process image")
+      throw error
+    }
+  }
+
+  const handleManualAdd = async (plantData: ManualPlantData) => {
+    try {
+      const now = new Date().toISOString()
+      const nextWaterDate = new Date()
+      nextWaterDate.setDate(nextWaterDate.getDate() + plantData.watering_frequency_days)
+      const nextFertilizeDate = new Date()
+      nextFertilizeDate.setDate(nextFertilizeDate.getDate() + plantData.fertilizing_frequency_days)
+
+      const response = await fetch("/api/plants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: plantData.name,
+          species: plantData.species || null,
+          scientific_name: null,
+          image_url: correctingSession?.image_url || null,
+          location: plantData.location,
+          sunlight_level: plantData.sunlight_level,
+          watering_frequency_days: plantData.watering_frequency_days,
+          fertilizing_frequency_days: plantData.fertilizing_frequency_days,
+          last_watered: now,
+          last_fertilized: now,
+          next_water_date: nextWaterDate.toISOString(),
+          next_fertilize_date: nextFertilizeDate.toISOString(),
+          humidity_preference: plantData.humidity_preference,
+          temperature_range: plantData.temperature_range,
+          care_notes: plantData.care_notes,
+          sources: [],
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to add plant")
+      }
+
+      // If this was a correction, delete the failed session
+      if (correctingSession) {
+        await fetch(`/api/import-sessions/${correctingSession.id}`, { method: "DELETE" })
+        setCorrectingSession(null)
+      }
+
+      mutate("/api/plants")
+      mutate("/api/import-sessions")
+    } catch (error) {
+      console.error("Failed to add plant:", error)
+      alert(error instanceof Error ? error.message : "Failed to add plant")
+      throw error
     }
   }
 
   const handleWater = async (id: string) => {
     await fetch(`/api/plants/${id}/water`, { method: "POST" })
     mutate("/api/plants")
+    mutate(`/api/plants/${id}/history`)
   }
 
   const handleFertilize = async (id: string) => {
     await fetch(`/api/plants/${id}/fertilize`, { method: "POST" })
     mutate("/api/plants")
+    mutate(`/api/plants/${id}/history`)
   }
 
   const handleEdit = (plant: Plant) => {
@@ -193,49 +214,52 @@ export default function Home() {
     mutate("/api/plants")
   }
 
-  const handleConfirmImport = async (session: ImportSession) => {
-    const careReqs = session.care_requirements || session.partial_data?.care_requirements
-    const species = session.identified_species || session.partial_data?.identified_species
-    const scientificName = session.scientific_name || session.partial_data?.scientific_name
-    const sources = session.research_sources?.length ? session.research_sources : session.partial_data?.research_sources
-
-    if (!careReqs) return
-
-    const plantPayload = {
-      name: species,
-      species: species,
-      scientific_name: scientificName,
-      image_url: session.image_url,
-      sunlight_level: careReqs.sunlight_level,
-      watering_frequency_days: careReqs.watering_frequency_days,
-      fertilizing_frequency_days: careReqs.fertilizing_frequency_days,
-      humidity_preference: careReqs.humidity_preference,
-      temperature_range: careReqs.temperature_range,
-      care_notes: careReqs.care_notes,
-      sources: sources || [],
-    }
-
-    const plantRes = await fetch("/api/plants", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(plantPayload),
-    })
-
-    await fetch(`/api/import-sessions/${session.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "completed" }),
-    })
-
-    mutate("/api/plants")
-    mutate("/api/import-sessions")
-    setExpandedSessionId(null)
-  }
-
   const handleCancelImport = async (id: string) => {
     await fetch(`/api/import-sessions/${id}`, { method: "DELETE" })
     mutate("/api/import-sessions")
   }
+
+  const handleCorrectImport = (session: ImportSession) => {
+    setCorrectingSession(session)
+    setManualFormOpen(true)
+  }
+
+  const handlePlantClick = (plant: Plant) => {
+    setSelectedPlant(plant)
+    setPlantDetailOpen(true)
+  }
+
+  // Filter plants based on search and filters
+  const filteredPlants = useMemo(() => {
+    return plants.filter((plant) => {
+      // Search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase()
+        const matchesName = plant.name.toLowerCase().includes(query)
+        const matchesSpecies = plant.species?.toLowerCase().includes(query)
+        const matchesLocation = plant.location?.toLowerCase().includes(query)
+        if (!matchesName && !matchesSpecies && !matchesLocation) {
+          return false
+        }
+      }
+
+      // Location filter
+      if (selectedLocations.length > 0 && plant.location) {
+        if (!selectedLocations.includes(plant.location)) {
+          return false
+        }
+      }
+
+      // Species filter
+      if (selectedSpecies.length > 0 && plant.species) {
+        if (!selectedSpecies.includes(plant.species)) {
+          return false
+        }
+      }
+
+      return true
+    })
+  }, [plants, searchQuery, selectedLocations, selectedSpecies])
 
   if (plantsLoading || sessionsLoading) {
     return (
@@ -286,21 +310,62 @@ export default function Home() {
             </Button>
           </div>
         ) : view === "grid" ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {plants.map((plant) => (
-              <PlantCard
-                key={plant.id}
-                plant={plant}
-                onWater={handleWater}
-                onFertilize={handleFertilize}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-              />
-            ))}
+          <>
+            <PlantGalleryFilters
+              plants={plants}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              selectedLocations={selectedLocations}
+              onLocationsChange={setSelectedLocations}
+              selectedSpecies={selectedSpecies}
+              onSpeciesChange={setSelectedSpecies}
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredPlants.map((plant) => (
+                <PlantCard
+                  key={plant.id}
+                  plant={plant}
+                  onWater={handleWater}
+                  onFertilize={handleFertilize}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onClick={handlePlantClick}
+                />
+              ))}
+            </div>
+            {filteredPlants.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">No plants match your filters</p>
+                <Button
+                  variant="link"
+                  onClick={() => {
+                    setSearchQuery("")
+                    setSelectedLocations([])
+                    setSelectedSpecies([])
+                  }}
+                  className="mt-2"
+                >
+                  Clear filters
+                </Button>
+              </div>
+            )}
+          </>
+        ) : view === "dashboard" ? (
+          <div className="max-w-6xl mx-auto">
+            <DashboardOverview 
+              plants={plants} 
+              onPlantClick={handlePlantClick} 
+              onViewSchedule={() => setView("schedule")}
+            />
           </div>
         ) : (
           <div className="max-w-2xl mx-auto">
-            <ScheduleView plants={plants} onWater={handleWater} onFertilize={handleFertilize} />
+            <ScheduleView 
+              plants={plants} 
+              onWater={handleWater} 
+              onFertilize={handleFertilize}
+              onPlantClick={handlePlantClick}
+            />
           </div>
         )}
       </main>
@@ -309,7 +374,23 @@ export default function Home() {
         open={addModalOpen}
         onOpenChange={setAddModalOpen}
         onImageSelected={handleImageSelected}
-        isUploading={isUploading}
+        onManualAdd={() => setManualFormOpen(true)}
+      />
+
+      <ManualPlantForm
+        open={manualFormOpen}
+        onOpenChange={(open) => {
+          setManualFormOpen(open)
+          if (!open) {
+            setCorrectingSession(null)
+          }
+        }}
+        onSubmit={handleManualAdd}
+        initialData={correctingSession ? {
+          name: correctingSession.plant_name || "",
+          location: correctingSession.plant_location || "",
+        } : undefined}
+        sessionToComplete={correctingSession?.id || null}
       />
 
       <EditPlantModal
@@ -320,34 +401,25 @@ export default function Home() {
       />
 
       <ImportSidebar
-        sessions={enhancedSessions}
+        sessions={sessions}
         open={importSidebarOpen}
         onClose={() => setImportSidebarOpen(false)}
-        onConfirm={handleConfirmImport}
+        onConfirm={() => {}} 
         onCancel={handleCancelImport}
+        onCorrect={handleCorrectImport}
         expandedId={expandedSessionId}
         onToggleExpand={(id) => setExpandedSessionId(expandedSessionId === id ? null : id)}
+      />
+
+      <PlantDetailDrawer
+        plant={selectedPlant}
+        open={plantDetailOpen}
+        onClose={() => setPlantDetailOpen(false)}
+        onWater={handleWater}
+        onFertilize={handleFertilize}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
       />
     </div>
   )
 }
-
-const plantIdentificationSchema = z.object({
-  identified_species: z.string(),
-  scientific_name: z.string(),
-  confidence: z.number(),
-  care_requirements: z.object({
-    watering_frequency_days: z.number(),
-    fertilizing_frequency_days: z.number(),
-    sunlight_level: z.enum(["low", "medium", "bright", "direct"]),
-    humidity_preference: z.string(),
-    temperature_range: z.string(),
-    care_notes: z.string(),
-  }),
-  research_sources: z.array(
-    z.object({
-      name: z.string(),
-      recommendation: z.string(),
-    }),
-  ),
-})

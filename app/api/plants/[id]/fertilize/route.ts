@@ -20,6 +20,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const nextFertilizeDate = new Date(now)
   nextFertilizeDate.setDate(nextFertilizeDate.getDate() + (plant.fertilizing_frequency_days || 30))
 
+  // Record the fertilizing event in care history
+  const { error: historyError } = await supabase
+    .from("care_history")
+    .insert({
+      plant_id: id,
+      care_type: "fertilize",
+      performed_at: now.toISOString(),
+    })
+
+  if (historyError) {
+    console.error("Failed to record care history:", historyError)
+    // Don't fail the whole operation if history recording fails
+  }
+
   const { data, error } = await supabase
     .from("plants")
     .update({

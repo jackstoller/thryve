@@ -11,6 +11,7 @@ interface ImportSidebarProps {
   onClose: () => void
   onConfirm: (session: ImportSession) => void
   onCancel: (id: string) => void
+  onCorrect?: (session: ImportSession) => void
   expandedId: string | null
   onToggleExpand: (id: string) => void
 }
@@ -21,6 +22,7 @@ export function ImportSidebar({
   onClose,
   onConfirm,
   onCancel,
+  onCorrect,
   expandedId,
   onToggleExpand,
 }: ImportSidebarProps) {
@@ -54,6 +56,7 @@ export function ImportSidebar({
                 session={session}
                 onConfirm={onConfirm}
                 onCancel={onCancel}
+                onCorrect={onCorrect}
                 isExpanded={expandedId === session.id}
                 onToggleExpand={() => onToggleExpand(session.id)}
               />
