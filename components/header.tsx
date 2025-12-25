@@ -1,12 +1,12 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Leaf, Plus, Calendar, Grid3X3, Bell, LayoutDashboard } from "lucide-react"
+import { Leaf, Plus, Calendar, Grid3X3, Bell } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
 interface HeaderProps {
-  view: "grid" | "schedule" | "dashboard"
-  onViewChange: (view: "grid" | "schedule" | "dashboard") => void
+  view: "grid" | "schedule"
+  onViewChange: (view: "grid" | "schedule") => void
   onAddPlant: () => void
   importCount: number
   urgentCount: number
@@ -18,14 +18,14 @@ export function Header({ view, onViewChange, onAddPlant, importCount, urgentCoun
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <button 
-            onClick={() => onViewChange("dashboard")}
+            onClick={() => onViewChange("grid")}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
             <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
               <Leaf className="w-6 h-6 text-primary-foreground" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight">Plantwise</h1>
+            <div className="text-start">
+              <h1 className="text-xl font-bold tracking-tight">Thryve</h1>
               <p className="text-xs text-muted-foreground">Smart Plant Care</p>
             </div>
           </button>
@@ -46,14 +46,6 @@ export function Header({ view, onViewChange, onAddPlant, importCount, urgentCoun
             )}
 
             <div className="flex bg-muted rounded-lg p-1">
-              <Button 
-                variant={view === "dashboard" ? "secondary" : "ghost"} 
-                size="sm" 
-                onClick={() => onViewChange("dashboard")}
-              >
-                <LayoutDashboard className="w-4 h-4 mr-1" />
-                Dashboard
-              </Button>
               <Button variant={view === "grid" ? "secondary" : "ghost"} size="sm" onClick={() => onViewChange("grid")}>
                 <Grid3X3 className="w-4 h-4 mr-1" />
                 Plants

@@ -167,7 +167,7 @@ export function PlantCard({ plant, onWater, onFertilize, onEdit, onDelete, onCli
         )}
 
         {/* Water Progress Bar */}
-        <div className="mb-3">
+        <div>
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs text-muted-foreground">Next watering</span>
             <span className="text-xs font-medium">
@@ -188,50 +188,6 @@ export function PlantCard({ plant, onWater, onFertilize, onEdit, onDelete, onCli
               style={{ width: `${waterProgress}%` }}
             />
           </div>
-        </div>
-
-        <div className="flex gap-2">
-          {needsWater ? (
-            <Button
-              size="sm"
-              className="bg-[var(--water-blue)] hover:bg-[var(--water-blue)]/90 text-white flex-1"
-              onClick={(e) => {
-                e.stopPropagation()
-                onWater(plant.id)
-              }}
-            >
-              <Droplets className="w-4 h-4 mr-1" />
-              Water Now
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              className="flex-1 text-muted-foreground"
-              onClick={(e) => e.stopPropagation()}
-              disabled
-            >
-              <Droplets className="w-4 h-4 mr-1" />
-              {waterStatus.text}
-            </Button>
-          )}
-          
-          <Button
-            size="sm"
-            variant={needsFertilizer ? "default" : "ghost"}
-            className={
-              needsFertilizer 
-                ? "bg-[var(--fertilizer-amber)] hover:bg-[var(--fertilizer-amber)]/90 text-white" 
-                : "text-muted-foreground"
-            }
-            onClick={(e) => {
-              e.stopPropagation()
-              onFertilize(plant.id)
-            }}
-            title={needsFertilizer ? "Feed Now" : "Not due yet"}
-          >
-            <Leaf className="w-4 h-4" />
-          </Button>
         </div>
       </CardContent>
     </Card>

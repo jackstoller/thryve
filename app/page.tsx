@@ -9,7 +9,6 @@ import { EditPlantModal } from "@/components/edit-plant-modal"
 import { ManualPlantForm, type ManualPlantData } from "@/components/manual-plant-form"
 import { ImportSidebar } from "@/components/import-sidebar"
 import { ScheduleView } from "@/components/schedule-view"
-import { DashboardOverview } from "@/components/dashboard-overview"
 import { PlantDetailDrawer } from "@/components/plant-detail-drawer"
 import { PlantGalleryFilters } from "@/components/plant-gallery-filters"
 import { Button } from "@/components/ui/button"
@@ -27,7 +26,7 @@ const fetcher = async (url: string) => {
 }
 
 export default function Home() {
-  const [view, setView] = useState<"grid" | "schedule" | "dashboard">("dashboard")
+  const [view, setView] = useState<"grid" | "schedule">("grid")
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [manualFormOpen, setManualFormOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -350,14 +349,6 @@ export default function Home() {
               </div>
             )}
           </>
-        ) : view === "dashboard" ? (
-          <div className="max-w-6xl mx-auto">
-            <DashboardOverview 
-              plants={plants} 
-              onPlantClick={handlePlantClick} 
-              onViewSchedule={() => setView("schedule")}
-            />
-          </div>
         ) : (
           <div className="max-w-2xl mx-auto">
             <ScheduleView 

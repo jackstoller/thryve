@@ -8,7 +8,7 @@ const _inter = Inter({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Plantwise - Smart Plant Care",
+  title: "Thryve - Smart Plant Care",
   description: "Track and care for your plants with AI-powered identification and care schedules",
   generator: "v0.app",
   icons: {
