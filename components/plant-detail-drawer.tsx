@@ -24,6 +24,8 @@ import {
   Edit,
   Trash2,
   History,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import type { Plant, CareHistoryItem } from "@/lib/types"
 import { format, formatDistanceToNow, isPast, isToday, differenceInDays } from "date-fns"
@@ -53,6 +55,7 @@ export function PlantDetailDrawer({
   onDelete,
 }: PlantDetailDrawerProps) {
   const [isMobile, setIsMobile] = useState(false)
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
 
   const { data: careHistory } = useSWR<CareHistoryItem[]>(
     plant ? `/api/plants/${plant.id}/history` : null,
@@ -70,6 +73,11 @@ export function PlantDetailDrawer({
     return () => window.removeEventListener("resize", checkMobile)
   }, [])
 
+  // Reset photo index when plant changes
+  useEffect(() => {
+    setCurrentPhotoIndex(0)
+  }, [plant?.id])
+
   if (!plant) return null
 
   const needsWater =
@@ -77,6 +85,28 @@ export function PlantDetailDrawer({
   const needsFertilizer =
     plant.next_fertilize_date &&
     (isPast(new Date(plant.next_fertilize_date)) || isToday(new Date(plant.next_fertilize_date)))
+  
+  // Get sorted photos or fallback
+  const photos = plant.photos && plant.photos.length > 0 
+    ? plant.photos.sort((a, b) => a.order - b.order)
+    : plant.image_url ? [{ id: 'fallback', url: plant.image_url, order: 0 }] : []
+  
+  const hasMultiplePhotos = photos.length > 1
+
+  const handlePrevPhoto = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setCurrentPhotoIndex((prev) => (prev === 0 ? photos.length - 1 : prev - 1))
+  }
+
+  const handleNextPhoto = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setCurrentPhotoIndex((prev) => (prev === photos.length - 1 ? 0 : prev + 1))
+  }
+
+  const handleDotClick = (e: React.MouseEvent, index: number) => {
+    e.stopPropagation()
+    setCurrentPhotoIndex(index)
+  }
 
   const getSunlightLabel = (level: string | null) => {
     switch (level) {
@@ -119,45 +149,121 @@ export function PlantDetailDrawer({
   // Shared content component
   const renderContent = (useDialogTitle: boolean = false) => (
     <div className="overflow-y-auto max-h-[90vh] rounded-lg">
-      {/* Header Image */}
-      <div className="relative h-64 bg-muted">
-        {plant.image_url ? (
-          <img src={plant.image_url} alt={plant.name} className="w-full h-full object-cover" />
-        ) : (
+      {/* Photo Gallery with Carousel */}
+      {photos.length > 0 ? (
+        <div className="relative h-64 bg-muted group">
+          <img 
+            src={photos[currentPhotoIndex].url} 
+            alt={`${plant.name} ${currentPhotoIndex + 1}`} 
+            className="w-full h-full object-cover transition-opacity duration-300" 
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+
+          {/* Carousel Navigation */}
+          {hasMultiplePhotos && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute left-4 top-1/2 -translate-y-1/2 bg-background/80 backdrop-blur-sm hover:bg-background h-10 w-10 z-20"
+                onClick={handlePrevPhoto}
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-4 top-1/2 -translate-y-1/2 bg-background/80 backdrop-blur-sm hover:bg-background h-10 w-10 z-20"
+                onClick={handleNextPhoto}
+              >
+                <ChevronRight className="w-5 h-5" />
+              </Button>
+              
+              {/* Photo Dots Indicator */}
+              <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex gap-1.5 z-20">
+                {photos.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={(e) => handleDotClick(e, index)}
+                    className={`w-2 h-2 rounded-full transition-all ${
+                      index === currentPhotoIndex 
+                        ? 'bg-white w-6' 
+                        : 'bg-white/50 hover:bg-white/75'
+                    }`}
+                    aria-label={`Go to photo ${index + 1}`}
+                  />
+                ))}
+              </div>
+
+              {/* Photo Counter */}
+              <div className="absolute top-4 left-4 bg-background/80 backdrop-blur-sm px-2 py-1 rounded-full text-xs font-medium z-20">
+                {currentPhotoIndex + 1} / {photos.length}
+              </div>
+            </>
+          )}
+          
+          {/* Close Button for Mobile */}
+          {!useDialogTitle && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-4 right-4 bg-background/80 backdrop-blur-sm hover:bg-background z-20"
+              onClick={onClose}
+            >
+              <X className="w-5 h-5" />
+            </Button>
+          )}
+
+          {/* Plant Name Overlay */}
+          <div className="absolute bottom-0 left-0 right-0 p-6 text-white z-10">
+            {useDialogTitle ? (
+              <DialogTitle className="text-3xl font-bold mb-1">{plant.name}</DialogTitle>
+            ) : (
+              <h2 className="text-3xl font-bold mb-1">{plant.name}</h2>
+            )}
+            {plant.species && <p className="text-lg italic opacity-90">{plant.species}</p>}
+            {plant.location && (
+              <div className="flex items-center gap-1 mt-2 opacity-90">
+                <MapPin className="w-4 h-4" />
+                <span className="text-sm">{plant.location}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="relative h-64 bg-muted">
           <div className="w-full h-full flex items-center justify-center">
             <Leaf className="w-24 h-24 text-primary/30" />
           </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-
-        {/* Close Button for Mobile */}
-        {!useDialogTitle && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-4 right-4 bg-background/80 backdrop-blur-sm hover:bg-background"
-            onClick={onClose}
-          >
-            <X className="w-5 h-5" />
-          </Button>
-        )}
-
-        {/* Plant Name Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-          {useDialogTitle ? (
-            <DialogTitle className="text-3xl font-bold mb-1">{plant.name}</DialogTitle>
-          ) : (
-            <h2 className="text-3xl font-bold mb-1">{plant.name}</h2>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+          
+          {!useDialogTitle && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-4 right-4 bg-background/80 backdrop-blur-sm hover:bg-background"
+              onClick={onClose}
+            >
+              <X className="w-5 h-5" />
+            </Button>
           )}
-          {plant.species && <p className="text-lg italic opacity-90">{plant.species}</p>}
-          {plant.location && (
-            <div className="flex items-center gap-1 mt-2 opacity-90">
-              <MapPin className="w-4 h-4" />
-              <span className="text-sm">{plant.location}</span>
-            </div>
-          )}
+
+          <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+            {useDialogTitle ? (
+              <DialogTitle className="text-3xl font-bold mb-1">{plant.name}</DialogTitle>
+            ) : (
+              <h2 className="text-3xl font-bold mb-1">{plant.name}</h2>
+            )}
+            {plant.species && <p className="text-lg italic opacity-90">{plant.species}</p>}
+            {plant.location && (
+              <div className="flex items-center gap-1 mt-2 opacity-90">
+                <MapPin className="w-4 h-4" />
+                <span className="text-sm">{plant.location}</span>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Content */}
       <div className="p-6 space-y-6">
@@ -271,6 +377,26 @@ export function PlantDetailDrawer({
             <CardContent className="p-6">
               <h3 className="font-semibold mb-4">Care Requirements</h3>
               <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-[var(--water-blue)]/10 flex items-center justify-center flex-shrink-0">
+                    <Droplets className="w-5 h-5 text-[var(--water-blue)]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-muted-foreground">Watering</p>
+                    <p className="font-medium">Every {plant.watering_frequency_days} days</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0">
+                    <Leaf className="w-5 h-5 text-green-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-muted-foreground">Fertilizing</p>
+                    <p className="font-medium">Every {plant.fertilizing_frequency_days} days</p>
+                  </div>
+                </div>
+
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-full bg-[var(--sun-yellow)]/10 flex items-center justify-center flex-shrink-0">
                     <Sun className="w-5 h-5 text-[var(--sun-yellow)]" />

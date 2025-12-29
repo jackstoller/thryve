@@ -26,12 +26,18 @@ const identificationSchema = z.object({
 const careResearchSchema = z.object({
   source_name: z.string().describe("Name of the authoritative source"),
   source_url: z.string().describe("URL of the source"),
-  watering_frequency_days: z.number().describe("Recommended days between watering"),
-  fertilizing_frequency_days: z.number().describe("Recommended days between fertilizing"),
-  sunlight_level: z.enum(["low", "medium", "bright", "direct"]).describe("Light requirements"),
-  humidity_preference: z.string().describe("Humidity needs"),
-  temperature_range: z.string().describe("Ideal temperature range"),
-  care_notes: z.string().describe("2-3 concise bullet points about care essentials"),
+  has_watering_info: z.boolean().describe("True if source explicitly mentions watering frequency"),
+  watering_frequency_days: z.number().describe("Recommended days between watering from this source"),
+  has_fertilizing_info: z.boolean().describe("True if source explicitly mentions fertilizing frequency"),
+  fertilizing_frequency_days: z.number().describe("Recommended days between fertilizing from this source"),
+  has_light_info: z.boolean().describe("True if source explicitly mentions light requirements"),
+  sunlight_level: z.enum(["low", "medium", "bright", "direct"]).describe("Light requirements from this source"),
+  has_humidity_info: z.boolean().describe("True if source explicitly mentions humidity needs"),
+  humidity_preference: z.string().describe("Humidity needs from this source"),
+  has_temperature_info: z.boolean().describe("True if source explicitly mentions temperature range"),
+  temperature_range: z.string().describe("Ideal temperature range from this source"),
+  care_notes: z.string().describe("Direct quotes or specific care tips from this source"),
+  confidence: z.number().min(0).max(1).describe("Your confidence that this information is actually from the source content (0-1). Use 0 if you had to guess or make assumptions."),
 })
 
 // Schema for consolidated care requirements
@@ -481,91 +487,157 @@ async function fetchWebContent(url: string): Promise<string> {
 async function researchCareSources(species: string, scientificName: string) {
   console.log(`[Research] Starting REAL web research for: ${species} (${scientificName})`)
   
-  // Search for plant care information
-  const searchQuery = `${species} ${scientificName} plant care watering fertilizing light requirements`
-  const searchResults = await searchWeb(searchQuery)
-  
-  console.log(`[Research] Found ${searchResults.length} search results`)
-
-  const researched: z.infer<typeof careResearchSchema>[] = []
   const MIN_SOURCES_REQUIRED = 3
+  const MIN_CONFIDENCE = 0.5 // Minimum confidence to accept a source
+  const researched: z.infer<typeof careResearchSchema>[] = []
   
-  // Keep trying until we have 3 sources or run out of search results
-  for (let index = 0; index < searchResults.length && researched.length < MIN_SOURCES_REQUIRED; index++) {
-    const result = searchResults[index]
-    console.log(`[Research] Processing source ${index + 1}/${searchResults.length} (have ${researched.length}/${MIN_SOURCES_REQUIRED}): ${result.title}`)
+  // Try progressively broader searches if needed
+  const searchStrategies = [
+    `${species} ${scientificName} plant care watering fertilizing light requirements`,
+    `${scientificName} care guide watering sunlight`,
+    `${species} plant care instructions`,
+    `how to care for ${species} ${scientificName}`,
+  ]
+  
+  for (let strategyIndex = 0; strategyIndex < searchStrategies.length && researched.length < MIN_SOURCES_REQUIRED; strategyIndex++) {
+    const searchQuery = searchStrategies[strategyIndex]
+    console.log(`[Research] Search strategy ${strategyIndex + 1}/${searchStrategies.length}: "${searchQuery}"`)
     
-    try {
-      // Fetch actual web content
-      const webContent = await fetchWebContent(result.url)
+    const searchResults = await searchWeb(searchQuery)
+    console.log(`[Research] Found ${searchResults.length} search results for strategy ${strategyIndex + 1}`)
+    
+    // Keep trying sources until we have enough valid ones
+    for (let index = 0; index < searchResults.length && researched.length < MIN_SOURCES_REQUIRED; index++) {
+      const result = searchResults[index]
       
-      // Use snippet if web content fetch failed
-      const contentToAnalyze = webContent && webContent.length >= 100 
-        ? webContent 
-        : result.snippet
-      
-      if (!contentToAnalyze || contentToAnalyze.length < 20) {
-        console.warn(`[Research] Insufficient content from source ${index + 1}, skipping and trying next`)
+      // Skip if we already used this URL
+      if (researched.some(r => r.source_url === result.url)) {
+        console.log(`[Research] Skipping duplicate source: ${result.url}`)
         continue
       }
       
-      console.log(`[Research] Analyzing ${contentToAnalyze.length} characters from source ${index + 1}`)
+      console.log(`[Research] Processing source ${index + 1}/${searchResults.length} (have ${researched.length}/${MIN_SOURCES_REQUIRED}): ${result.title}`)
       
-      const prompt = `You are analyzing plant care information for ${species} (${scientificName}) from ${result.title}.
+      try {
+        // Fetch actual web content
+        const webContent = await fetchWebContent(result.url)
+        
+        // Use snippet if web content fetch failed
+        const contentToAnalyze = webContent && webContent.length >= 100 
+          ? webContent 
+          : result.snippet
+        
+        if (!contentToAnalyze || contentToAnalyze.length < 20) {
+          console.warn(`[Research] Insufficient content from source ${index + 1}, skipping and trying next`)
+          continue
+        }
+        
+        console.log(`[Research] Analyzing ${contentToAnalyze.length} characters from source ${index + 1}`)
+        
+        const prompt = `You are analyzing plant care information for ${species} (${scientificName}) from ${result.title}.
 
 Content to analyze:
 ${contentToAnalyze}
 
-Extract specific care recommendations from this content. Provide:
+CRITICAL INSTRUCTIONS:
+1. Extract information ONLY if it is EXPLICITLY stated in the content above
+2. For each field, first set the has_*_info boolean to indicate if that information exists
+3. If information is NOT in the content, set has_*_info to false and provide a reasonable default value
+4. Set your confidence score based on how explicitly the information is stated:
+   - 1.0: Explicitly stated with specific numbers/details
+   - 0.7-0.9: Clearly implied or described without exact numbers
+   - 0.3-0.6: Vague mentions or general statements
+   - 0.0-0.2: No information found, you're guessing
+5. NEVER make up specific numbers if they aren't in the content
+6. If most information is missing, set confidence to 0.0 and we'll try another source
 
+Provide:
 1. source_name: "${result.title}"
 2. source_url: "${result.url}"
-3. watering_frequency_days: Number of days between waterings (look for phrases like "weekly", "every X days", "twice a week", etc. Convert to days: weekly=7, bi-weekly=14, monthly=30)
-4. fertilizing_frequency_days: Days between fertilizing (monthly=30, bi-weekly=14, etc.)
-5. sunlight_level: MUST be one of: "low", "medium", "bright", "direct"
-   - low: shade, indirect light, north-facing
-   - medium: partial sun, filtered light
-   - bright: bright indirect, east/west windows
-   - direct: full sun, south-facing, outdoor sun
-6. humidity_preference: "low" (<40%), "moderate" (40-60%), or "high" (>60%)
-7. temperature_range: in Fahrenheit (e.g., "60-75°F")
-8. care_notes: 2-3 bullet points (max 15 words each) with the MOST important care tips from this source
+3. has_watering_info: true only if watering frequency is explicitly mentioned
+4. watering_frequency_days: Convert phrases like "weekly"=7, "bi-weekly"=14, "twice a week"=3, "monthly"=30. Default to 7 if not mentioned.
+5. has_fertilizing_info: true only if fertilizing frequency is explicitly mentioned
+6. fertilizing_frequency_days: Same conversion rules. Default to 30 if not mentioned.
+7. has_light_info: true only if light requirements are mentioned
+8. sunlight_level: MUST be one of: "low", "medium", "bright", "direct" based on content
+   - low: shade, low light, indirect light, north-facing
+   - medium: partial sun, filtered light, moderate light
+   - bright: bright indirect, east/west windows, lots of light
+   - direct: full sun, direct sunlight, south-facing, outdoor sun
+   Default to "medium" if not mentioned.
+9. has_humidity_info: true only if humidity is mentioned
+10. humidity_preference: "low" (<40%), "moderate" (40-60%), or "high" (>60%). Default to "moderate" if not mentioned.
+11. has_temperature_info: true only if temperature range is mentioned
+12. temperature_range: in Fahrenheit (e.g., "60-75°F"). Default to "60-75°F" if not mentioned.
+13. care_notes: ONLY direct quotes or paraphrases from the content. If no specific care tips, say "No specific care information available from this source"
+14. confidence: Your overall confidence score (0-1) that the information came from the source`
 
-Extract information ONLY from the content provided. Be specific with numbers.`
+        const result_obj = await generateObject({
+          model: MODELS[0],
+          schema: careResearchSchema,
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+        })
 
-      const result_obj = await generateObject({
-        model: MODELS[0],
-        schema: careResearchSchema,
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-      })
-
-      console.log(`[Research] Successfully extracted care info from source ${index + 1}`)
-      console.log(`[Research] - Source: ${result_obj.object.source_name}`)
-      console.log(`[Research] - Watering: ${result_obj.object.watering_frequency_days} days`)
-      console.log(`[Research] - Fertilizing: ${result_obj.object.fertilizing_frequency_days} days`)
-      console.log(`[Research] - Light: ${result_obj.object.sunlight_level}`)
-      
-      researched.push(result_obj.object)
-      console.log(`[Research] Successfully added source ${researched.length}/${MIN_SOURCES_REQUIRED}`)
-    } catch (error) {
-      console.error(`[Research] Error processing source ${index + 1}:`, error)
-      // Continue to next source
+        const extractedData = result_obj.object
+        
+        // Validate the source has sufficient information and confidence
+        const infoCount = [
+          extractedData.has_watering_info,
+          extractedData.has_fertilizing_info,
+          extractedData.has_light_info,
+          extractedData.has_humidity_info,
+          extractedData.has_temperature_info
+        ].filter(Boolean).length
+        
+        console.log(`[Research] Source ${index + 1} - Confidence: ${extractedData.confidence}, Info fields: ${infoCount}/5`)
+        
+        if (extractedData.confidence < MIN_CONFIDENCE) {
+          console.warn(`[Research] Source ${index + 1} rejected - confidence too low (${extractedData.confidence} < ${MIN_CONFIDENCE})`)
+          continue
+        }
+        
+        if (infoCount < 2) {
+          console.warn(`[Research] Source ${index + 1} rejected - insufficient information (${infoCount}/5 fields)`)
+          continue
+        }
+        
+        console.log(`[Research] Successfully extracted care info from source ${index + 1}`)
+        console.log(`[Research] - Source: ${extractedData.source_name}`)
+        console.log(`[Research] - Watering: ${extractedData.watering_frequency_days} days (explicit: ${extractedData.has_watering_info})`)
+        console.log(`[Research] - Fertilizing: ${extractedData.fertilizing_frequency_days} days (explicit: ${extractedData.has_fertilizing_info})`)
+        console.log(`[Research] - Light: ${extractedData.sunlight_level} (explicit: ${extractedData.has_light_info})`)
+        
+        researched.push(extractedData)
+        console.log(`[Research] Successfully added source ${researched.length}/${MIN_SOURCES_REQUIRED}`)
+      } catch (error) {
+        console.error(`[Research] Error processing source ${index + 1}:`, error)
+        // Continue to next source
+      }
+    }
+    
+    if (researched.length >= MIN_SOURCES_REQUIRED) {
+      console.log(`[Research] Successfully gathered ${researched.length} valid sources`)
+      break
+    }
+    
+    if (strategyIndex < searchStrategies.length - 1) {
+      console.log(`[Research] Only found ${researched.length}/${MIN_SOURCES_REQUIRED} sources, trying next search strategy...`)
     }
   }
   
   // Check if we met minimum requirements
   if (researched.length < MIN_SOURCES_REQUIRED) {
-    const errorMsg = `Failed to gather sufficient research data. Only found ${researched.length} valid source(s) out of ${MIN_SOURCES_REQUIRED} required. Unable to provide reliable care recommendations.`
+    const errorMsg = `Unable to find sufficient reliable care information. Found ${researched.length} valid source(s) out of ${MIN_SOURCES_REQUIRED} required. The available sources either lacked specific care details or the information couldn't be verified with sufficient confidence. Please add this plant manually with care instructions from a trusted source.`
     console.error(`[Research] ${errorMsg}`)
     throw new Error(errorMsg)
   }
 
-  console.log(`[Research] Successfully processed ${researched.length} sources with real web data`)
+  console.log(`[Research] Successfully processed ${researched.length} sources with verified data`)
   return researched
 }
 
@@ -605,7 +677,7 @@ function consolidateCareRequirements(sources: z.infer<typeof careResearchSchema>
 }
 
 // Background processing function
-async function processPlantIdentification(sessionId: string, imageUrl: string) {
+async function processPlantIdentification(sessionId: string, imageUrl: string, additionalPhotos: string[] = []) {
   const supabase = await createClient()
 
   try {
@@ -711,14 +783,23 @@ async function processPlantIdentification(sessionId: string, imageUrl: string) {
     
     const careRequirements = consolidateCareRequirements(researchedSources)
 
+    // Build photos array from primary image and additional photos
+    const allPhotoUrls = [imageUrl, ...additionalPhotos]
+    const photos = allPhotoUrls.map((url, index) => ({
+      id: crypto.randomUUID(),
+      url,
+      order: index,
+    }))
+
     // Step 4: Auto-create the plant using user-provided name and location
-    console.log(`[Processing] Session ${sessionId} - creating plant`)
+    console.log(`[Processing] Session ${sessionId} - creating plant with ${photos.length} photo(s)`)
     const plantPayload = {
       name: session.plant_name || identification.identified_species,
       location: session.plant_location || null,
       species: identification.identified_species,
       scientific_name: identification.scientific_name,
       image_url: imageUrl,
+      photos: photos,
       sunlight_level: careRequirements.sunlight_level,
       watering_frequency_days: careRequirements.watering_frequency_days,
       fertilizing_frequency_days: careRequirements.fertilizing_frequency_days,
@@ -777,7 +858,7 @@ async function processPlantIdentification(sessionId: string, imageUrl: string) {
 
 export async function POST(req: Request) {
   try {
-    const { imageUrl, sessionId } = await req.json()
+    const { imageUrl, sessionId, additionalPhotos } = await req.json()
 
     console.log(`[API] POST /api/identify-plant called with sessionId: ${sessionId}`)
 
@@ -803,7 +884,7 @@ export async function POST(req: Request) {
     console.log(`[API] Session ${sessionId} verified, starting background processing`)
 
     // Start background processing (don't await)
-    processPlantIdentification(sessionId, imageUrl).catch((error) => {
+    processPlantIdentification(sessionId, imageUrl, additionalPhotos || []).catch((error) => {
       console.error(`[API] Background processing error for session ${sessionId}:`, error)
     })
 

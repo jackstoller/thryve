@@ -9,7 +9,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { PlantPhotosManager } from "@/components/plant-photos-manager"
+import useSWR, { mutate } from "swr"
 import type { Plant } from "@/lib/types"
+
+const fetcher = async (url: string) => {
+  const res = await fetch(url)
+  return res.json()
+}
 
 interface EditPlantModalProps {
   plant: Plant | null
@@ -29,24 +36,34 @@ export function EditPlantModal({ plant, open, onOpenChange, onSave }: EditPlantM
     care_notes: "",
   })
 
+  // Fetch fresh plant data when modal is open
+  const { data: freshPlant } = useSWR<Plant>(
+    plant && open ? `/api/plants/${plant.id}` : null,
+    fetcher,
+    { refreshInterval: 0 }
+  )
+
+  // Use fresh plant data if available, otherwise use prop
+  const currentPlant = freshPlant || plant
+
   useEffect(() => {
-    if (plant) {
+    if (currentPlant) {
       setFormData({
-        name: plant.name,
-        species: plant.species || "",
-        location: plant.location || "",
-        sunlight_level: plant.sunlight_level,
-        watering_frequency_days: plant.watering_frequency_days,
-        fertilizing_frequency_days: plant.fertilizing_frequency_days,
-        care_notes: plant.care_notes || "",
+        name: currentPlant.name,
+        species: currentPlant.species || "",
+        location: currentPlant.location || "",
+        sunlight_level: currentPlant.sunlight_level,
+        watering_frequency_days: currentPlant.watering_frequency_days,
+        fertilizing_frequency_days: currentPlant.fertilizing_frequency_days,
+        care_notes: currentPlant.care_notes || "",
       })
     }
-  }, [plant])
+  }, [currentPlant])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (plant) {
-      onSave({ id: plant.id, ...formData })
+    if (currentPlant) {
+      onSave({ id: currentPlant.id, ...formData })
     }
   }
 
@@ -145,6 +162,17 @@ export function EditPlantModal({ plant, open, onOpenChange, onSave }: EditPlantM
               onChange={(e) => setFormData({ ...formData, care_notes: e.target.value })}
             />
           </div>
+
+          {currentPlant && (
+            <PlantPhotosManager
+              plantId={currentPlant.id}
+              photos={currentPlant.photos || []}
+              onPhotosChange={() => {
+                mutate(`/api/plants/${currentPlant.id}`)
+                mutate("/api/plants")
+              }}
+            />
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

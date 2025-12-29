@@ -1,9 +1,16 @@
+export interface PlantPhoto {
+  id: string
+  url: string
+  order: number
+}
+
 export interface Plant {
   id: string
   name: string
   species: string | null
   scientific_name: string | null
   image_url: string | null
+  photos: PlantPhoto[]
   location: string | null
   sunlight_level: "low" | "medium" | "bright" | "direct" | null
   watering_frequency_days: number

@@ -8,7 +8,9 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Sparkles, Globe, CheckCircle2, BookOpen } from "lucide-react"
+import { Loader2, Sparkles, Globe, CheckCircle2, BookOpen, Shuffle, ExternalLink } from "lucide-react"
+import { getRandomPlantName } from "@/lib/plant-names"
+import type { ResearchSource } from "@/lib/types"
 
 interface ManualPlantFormProps {
   open: boolean
@@ -16,6 +18,7 @@ interface ManualPlantFormProps {
   onSubmit: (plant: ManualPlantData) => Promise<void>
   initialData?: Partial<ManualPlantData>
   sessionToComplete?: string | null
+  researchSources?: ResearchSource[]
 }
 
 export interface ManualPlantData {
@@ -30,7 +33,7 @@ export interface ManualPlantData {
   care_notes: string
 }
 
-export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, sessionToComplete }: ManualPlantFormProps) {
+export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, sessionToComplete, researchSources }: ManualPlantFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isResearching, setIsResearching] = useState(false)
   const [researchProgress, setResearchProgress] = useState<{
@@ -52,22 +55,37 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
     care_notes: initialData?.care_notes || "",
   })
 
-  // Update form data when initialData changes
+  // Update form data when dialog opens or initialData changes
   useEffect(() => {
-    if (initialData) {
-      setFormData({
-        name: initialData.name || "",
-        species: initialData.species || "",
-        location: initialData.location || "",
-        watering_frequency_days: initialData.watering_frequency_days || 7,
-        fertilizing_frequency_days: initialData.fertilizing_frequency_days || 30,
-        sunlight_level: initialData.sunlight_level || "medium",
-        humidity_preference: initialData.humidity_preference || "moderate",
-        temperature_range: initialData.temperature_range || "60-75°F",
-        care_notes: initialData.care_notes || "",
-      })
+    if (open) {
+      if (initialData) {
+        setFormData({
+          name: initialData.name || "",
+          species: initialData.species || "",
+          location: initialData.location || "",
+          watering_frequency_days: initialData.watering_frequency_days || 7,
+          fertilizing_frequency_days: initialData.fertilizing_frequency_days || 30,
+          sunlight_level: initialData.sunlight_level || "medium",
+          humidity_preference: initialData.humidity_preference || "moderate",
+          temperature_range: initialData.temperature_range || "60-75°F",
+          care_notes: initialData.care_notes || "",
+        })
+      } else {
+        // Reset form when opening without initialData
+        setFormData({
+          name: "",
+          species: "",
+          location: "",
+          watering_frequency_days: 7,
+          fertilizing_frequency_days: 30,
+          sunlight_level: "medium",
+          humidity_preference: "moderate",
+          temperature_range: "60-75°F",
+          care_notes: "",
+        })
+      }
     }
-  }, [initialData])
+  }, [open, initialData])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -181,6 +199,11 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
     }
   }
 
+  const handleAutoName = () => {
+    const randomName = getRandomPlantName()
+    setFormData({ ...formData, name: randomName })
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
@@ -191,13 +214,26 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Plant Name *</Label>
-            <Input
-              id="name"
-              placeholder="e.g., My Snake Plant"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              required
-            />
+            <div className="flex gap-2">
+              <Input
+                id="name"
+                placeholder="e.g., My Snake Plant"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="flex-1"
+                required
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAutoName}
+                disabled={isSubmitting}
+                className="shrink-0"
+                title="Generate a random plant name"
+              >
+                <Shuffle className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -226,6 +262,44 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
               </Button>
             </div>
           </div>
+
+          {/* Display research sources if provided from AI import */}
+          {researchSources && researchSources.length > 0 && (
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-medium text-sm mb-1">AI Research Complete</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Care requirements below were researched from {researchSources.length} authoritative source{researchSources.length !== 1 ? 's' : ''}. You can review and adjust them before adding.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Sources:</p>
+                {researchSources.map((source, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs bg-background/50 rounded p-2">
+                    <ExternalLink className="w-3 h-3 text-primary shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium">{source.name}</p>
+                      {source.url && (
+                        <a
+                          href={source.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline block truncate"
+                        >
+                          {source.url}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="location">Location *</Label>

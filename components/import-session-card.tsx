@@ -21,8 +21,10 @@ import {
   X,
   Globe,
   HelpCircle,
+  Shuffle,
 } from "lucide-react"
 import type { ImportSession, ResearchSource } from "@/lib/types"
+import { getRandomPlantName } from "@/lib/plant-names"
 
 interface ImportSessionCardProps {
   session: ImportSession
@@ -414,6 +416,7 @@ export function ImportSessionCard({
   const isFailed = session.status === "failed"
   const isCompleted = session.status === "completed"
   const needsSelection = session.status === "needs_selection"
+  const needsConfirmation = session.status === "confirming"
 
   // Use final session data (no partial data needed with server-side processing)
   const displaySpecies = session.identified_species
@@ -439,6 +442,8 @@ export function ImportSessionCard({
         return "Cross-referencing sources and verifying care requirements..."
       case "needs_selection":
         return "Please help us identify this plant"
+      case "confirming":
+        return "Research complete! Ready to add to your collection"
       case "completed":
         return "Successfully added to your collection!"
       case "failed":
@@ -474,6 +479,18 @@ export function ImportSessionCard({
       return
     }
     await handleSelectSuggestion(customSpecies, customScientificName)
+  }
+
+  const handleAutoName = () => {
+    const randomName = getRandomPlantName()
+    setCustomSpecies(randomName)
+    // Keep the scientific name the user might have already entered, or suggest they enter it
+    if (!customScientificName.trim()) {
+      // If no scientific name, suggest they still need to enter it
+      setTimeout(() => {
+        document.getElementById("custom-scientific")?.focus()
+      }, 100)
+    }
   }
 
   return (
@@ -515,14 +532,15 @@ export function ImportSessionCard({
 
               {/* Status Badge */}
               <Badge
-                variant={isCompleted ? "default" : isFailed ? "destructive" : needsSelection ? "outline" : "secondary"}
+                variant={isCompleted ? "default" : isFailed ? "destructive" : needsSelection || needsConfirmation ? "outline" : "secondary"}
                 className={`
                   shrink-0
                   ${isCompleted ? "bg-green-500 hover:bg-green-500" : ""}
                   ${needsSelection ? "border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950" : ""}
+                  ${needsConfirmation ? "border-primary text-primary bg-primary/10" : ""}
                 `}
               >
-                {isFailed ? "Failed" : isCompleted ? "Added!" : needsSelection ? "Needs ID" : isProcessing ? "Processing..." : "Done"}
+                {isFailed ? "Failed" : isCompleted ? "Added!" : needsSelection ? "Needs ID" : needsConfirmation ? "Ready!" : isProcessing ? "Processing..." : "Done"}
               </Badge>
             </div>
 
@@ -573,6 +591,17 @@ export function ImportSessionCard({
               <div className="flex items-center gap-2 text-sm text-primary bg-primary/5 rounded-lg px-3 py-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span>{getStatusMessage()}</span>
+              </div>
+            )}
+
+            {/* Ready for Confirmation */}
+            {needsConfirmation && (
+              <div className="flex items-start gap-3 text-sm text-primary bg-primary/5 rounded-lg px-3 py-2">
+                <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium mb-0.5">{getStatusMessage()}</p>
+                  <p className="text-xs text-muted-foreground">Review the care requirements below and click "Add Plant" to complete the import.</p>
+                </div>
               </div>
             )}
 
@@ -670,13 +699,26 @@ export function ImportSessionCard({
                       <Label htmlFor="custom-species" className="text-sm">
                         Common Name
                       </Label>
-                      <Input
-                        id="custom-species"
-                        placeholder="e.g., Snake Plant"
-                        value={customSpecies}
-                        onChange={(e) => setCustomSpecies(e.target.value)}
-                        disabled={isSelectingSpecies}
-                      />
+                      <div className="flex gap-2">
+                        <Input
+                          id="custom-species"
+                          placeholder="e.g., Snake Plant"
+                          value={customSpecies}
+                          onChange={(e) => setCustomSpecies(e.target.value)}
+                          className="flex-1"
+                          disabled={isSelectingSpecies}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleAutoName}
+                          disabled={isSelectingSpecies}
+                          className="shrink-0"
+                          title="Generate a random plant name"
+                        >
+                          <Shuffle className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="custom-scientific" className="text-sm">
@@ -720,6 +762,25 @@ export function ImportSessionCard({
                   <X className="w-4 h-4 mr-2" />
                   Cancel Import
                 </Button>
+              </div>
+            )}
+
+            {needsConfirmation && (
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => onCancel(session.id)}
+                  className="flex-1 text-muted-foreground hover:text-destructive hover:border-destructive"
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Cancel
+                </Button>
+                {onCorrect && (
+                  <Button onClick={() => onCorrect(session)} className="flex-1">
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    Add Plant
+                  </Button>
+                )}
               </div>
             )}
 

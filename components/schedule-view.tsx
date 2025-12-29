@@ -90,13 +90,13 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
   if (Object.keys(groupedSchedule).length === 0) {
     return (
       <Card className="border-dashed">
-        <CardContent className="py-16 text-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
-              <CheckCircle2 className="w-8 h-8 text-green-600 dark:text-green-500" />
+        <CardContent className="py-12 text-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
+              <CheckCircle2 className="w-7 h-7 text-green-600 dark:text-green-500" />
             </div>
             <div>
-              <h3 className="font-semibold text-lg mb-1">All caught up!</h3>
+              <h3 className="font-semibold text-base mb-1">All caught up!</h3>
               <p className="text-muted-foreground text-sm">No care tasks scheduled for the next 7 days</p>
             </div>
           </div>
@@ -106,27 +106,24 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 pb-4">
       {Object.entries(groupedSchedule).map(([dateStr, items]) => {
         const isOverdue = isPast(new Date(dateStr)) && !isToday(new Date(dateStr))
         const isTodayDate = isToday(new Date(dateStr))
         
         return (
           <div key={dateStr} className="relative">
-            {/* Timeline connector */}
-            <div className="absolute left-[52px] top-20 bottom-0 w-0.5 bg-gradient-to-b from-border to-transparent -z-10" />
-            
             <Card className={`
-              overflow-hidden transition-all duration-300 hover:shadow-lg
+              overflow-hidden transition-all duration-200 active:shadow-xl
               ${isOverdue ? 'border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/10' : ''}
               ${isTodayDate ? 'border-primary/50 bg-primary/5' : ''}
             `}>
-              <CardHeader className="pb-4 pt-6">
-                <div className="flex items-start gap-4">
+              <CardHeader className="pb-3 pt-4 px-4">
+                <div className="flex items-start gap-3">
                   {/* Date Badge */}
                   <div className={`
-                    flex-shrink-0 w-[88px] h-[88px] rounded-2xl flex flex-col items-center justify-center
-                    transition-all duration-300 shadow-sm
+                    flex-shrink-0 w-16 h-16 rounded-xl flex flex-col items-center justify-center
+                    transition-all duration-200 shadow-sm
                     ${isOverdue 
                       ? 'bg-gradient-to-br from-red-500 to-red-600 text-white' 
                       : isTodayDate 
@@ -134,46 +131,46 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
                         : 'bg-gradient-to-br from-muted to-muted/60 border border-border'
                     }
                   `}>
-                    {isOverdue && <AlertCircle className="w-5 h-5 mb-1 opacity-90" />}
-                    {!isOverdue && <Calendar className="w-4 h-4 mb-1 opacity-70" />}
-                    <div className={`text-3xl font-bold leading-none ${!isOverdue && !isTodayDate ? 'text-foreground' : ''}`}>
+                    {isOverdue && <AlertCircle className="w-4 h-4 mb-0.5 opacity-90" />}
+                    {!isOverdue && <Calendar className="w-3 h-3 mb-0.5 opacity-70" />}
+                    <div className={`text-2xl font-bold leading-none ${!isOverdue && !isTodayDate ? 'text-foreground' : ''}`}>
                       {getDayOfMonth(dateStr)}
                     </div>
-                    <div className={`text-xs font-medium uppercase tracking-wide mt-1 ${!isOverdue && !isTodayDate ? 'text-muted-foreground' : 'opacity-90'}`}>
+                    <div className={`text-[10px] font-medium uppercase tracking-wide mt-0.5 ${!isOverdue && !isTodayDate ? 'text-muted-foreground' : 'opacity-90'}`}>
                       {getMonth(dateStr)}
                     </div>
                   </div>
 
                   {/* Header Info */}
-                  <div className="flex-1 min-w-0 pt-1">
-                    <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex-1 min-w-0 pt-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Badge 
                         variant={getDateBadgeVariant(dateStr)} 
-                        className="text-sm px-3 py-1 font-semibold"
+                        className="text-xs px-2 py-0.5 font-semibold"
                       >
                         {getDateLabel(dateStr)}
                       </Badge>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <div className="w-1 h-1 rounded-full bg-muted-foreground/40" />
                         <span className="font-medium">
                           {items.length} {items.length === 1 ? "task" : "tasks"}
                         </span>
                       </div>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      {format(new Date(dateStr), "EEEE, MMMM d, yyyy")}
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      {format(new Date(dateStr), "EEEE, MMM d, yyyy")}
                     </p>
                   </div>
                 </div>
               </CardHeader>
 
-              <CardContent className="space-y-3 pt-0">
+              <CardContent className="space-y-2 pt-0 px-4 pb-4">
                 {items.map((item, idx) => (
                   <div
                     key={`${item.plant.id}-${item.type}-${idx}`}
                     className={`
-                      relative group rounded-xl border transition-all duration-300
-                      hover:shadow-md hover:scale-[1.02] hover:border-primary/30
+                      relative group rounded-lg border transition-all duration-200
+                      active:shadow-md active:scale-[0.98]
                       ${item.type === "water" 
                         ? 'bg-blue-50/50 dark:bg-blue-950/10 border-blue-200/50 dark:border-blue-900/30' 
                         : 'bg-amber-50/50 dark:bg-amber-950/10 border-amber-200/50 dark:border-amber-900/30'
@@ -182,22 +179,21 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
                   >
                     <button
                       onClick={() => onPlantClick(item.plant)}
-                      className="flex items-center gap-4 p-4 w-full text-left"
+                      className="flex items-center gap-3 p-3 w-full text-left active:opacity-70"
                     >
                       {/* Plant Image or Icon */}
                       {item.plant.image_url ? (
-                        <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 ring-2 ring-white dark:ring-gray-800 shadow-sm">
+                        <div className="relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 ring-2 ring-white dark:ring-gray-800 shadow-sm">
                           <img
                             src={item.plant.image_url}
                             alt={item.plant.name}
-                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                            className="w-full h-full object-cover"
                           />
                         </div>
                       ) : (
                         <div
                           className={`
-                            w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm
-                            transition-all duration-300 group-hover:scale-110
+                            w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm
                             ${item.type === "water" 
                               ? "bg-gradient-to-br from-blue-400 to-blue-600" 
                               : "bg-gradient-to-br from-amber-400 to-amber-600"
@@ -205,22 +201,22 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
                           `}
                         >
                           {item.type === "water" ? (
-                            <Droplets className="w-6 h-6 text-white" />
+                            <Droplets className="w-5 h-5 text-white" />
                           ) : (
-                            <Leaf className="w-6 h-6 text-white" />
+                            <Leaf className="w-5 h-5 text-white" />
                           )}
                         </div>
                       )}
 
                       {/* Plant Info */}
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-base truncate text-foreground">
+                        <p className="font-semibold text-sm truncate text-foreground">
                           {item.plant.name}
                         </p>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-1.5 mt-0.5">
                           <Badge 
                             variant="outline" 
-                            className={`text-xs ${
+                            className={`text-[10px] px-1.5 py-0 h-4 ${
                               item.type === "water"
                                 ? "border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300"
                                 : "border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300"
@@ -229,7 +225,7 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
                             {item.type === "water" ? "💧 Water" : "🌱 Fertilize"}
                           </Badge>
                           {item.plant.location && (
-                            <span className="text-xs text-muted-foreground truncate">
+                            <span className="text-[10px] text-muted-foreground truncate">
                               📍 {item.plant.location}
                             </span>
                           )}
@@ -238,15 +234,15 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
                     </button>
 
                     {/* Action Button */}
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
                       <Button
                         size="sm"
                         disabled={loadingAction !== null}
                         className={`
-                          shadow-md transition-all duration-300 hover:scale-105
+                          shadow-sm transition-all duration-200 active:scale-95 h-8 text-xs px-2
                           ${item.type === "water"
-                            ? "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
-                            : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white"
+                            ? "bg-gradient-to-r from-blue-500 to-blue-600 active:from-blue-600 active:to-blue-700 text-white"
+                            : "bg-gradient-to-r from-amber-500 to-amber-600 active:from-amber-600 active:to-amber-700 text-white"
                           }
                         `}
                         onClick={async (e) => {
@@ -264,20 +260,11 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
                         }}
                       >
                         {loadingAction?.plantId === item.plant.id && loadingAction?.type === item.type ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                            {item.type === "water" ? "Watering..." : "Feeding..."}
-                          </>
+                          <Loader2 className="w-3 h-3 animate-spin" />
                         ) : item.type === "water" ? (
-                          <>
-                            <Droplets className="w-4 h-4 mr-1.5" />
-                            Water Now
-                          </>
+                          <Droplets className="w-3 h-3" />
                         ) : (
-                          <>
-                            <Leaf className="w-4 h-4 mr-1.5" />
-                            Feed Now
-                          </>
+                          <Leaf className="w-3 h-3" />
                         )}
                       </Button>
                     </div>
@@ -291,14 +278,14 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
 
       {/* Load More Button */}
       {hasMoreItems && (
-        <div className="flex justify-center pt-4">
+        <div className="flex justify-center pt-2">
           <Button
             variant="outline"
-            size="lg"
+            size="default"
             onClick={() => setDaysToShow(daysToShow + 7)}
-            className="group hover:border-primary/50 hover:bg-primary/5 transition-all duration-300"
+            className="group active:border-primary/50 active:bg-primary/5 transition-all duration-200 active:scale-95"
           >
-            <Calendar className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+            <Calendar className="w-4 h-4 mr-2" />
             Show Next 7 Days
           </Button>
         </div>

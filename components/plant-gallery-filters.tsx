@@ -64,40 +64,41 @@ export function PlantGalleryFilters({
   }
 
   return (
-    <div className="flex flex-col sm:flex-row gap-3 mb-6">
+    <div className="flex flex-col gap-2.5 mb-4">
       {/* Search Bar */}
       <div className="relative flex-1">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
         <Input
-          placeholder="Search plants by name..."
+          placeholder="Search plants..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-9 pr-9"
+          className="pl-9 pr-9 h-10"
         />
         {searchQuery && (
           <button
             onClick={() => onSearchChange("")}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground active:text-foreground tap-target flex items-center justify-center"
           >
             <X className="w-4 h-4" />
           </button>
         )}
       </div>
 
-      {/* Location Filter */}
-      {locations.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="relative">
-              <Filter className="w-4 h-4 mr-2" />
-              Location
-              {selectedLocations.length > 0 && (
-                <Badge className="ml-2 h-5 w-5 p-0 flex items-center justify-center">
-                  {selectedLocations.length}
-                </Badge>
-              )}
-            </Button>
-          </DropdownMenuTrigger>
+      <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
+        {/* Location Filter */}
+        {locations.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="relative flex-shrink-0 h-9 active:scale-95">
+                <Filter className="w-3.5 h-3.5 mr-1.5" />
+                Location
+                {selectedLocations.length > 0 && (
+                  <Badge className="ml-1.5 h-4 w-4 p-0 flex items-center justify-center text-[10px]">
+                    {selectedLocations.length}
+                  </Badge>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>Filter by Location</DropdownMenuLabel>
             <DropdownMenuSeparator />
@@ -118,11 +119,11 @@ export function PlantGalleryFilters({
       {species.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="relative">
-              <Filter className="w-4 h-4 mr-2" />
+            <Button variant="outline" size="sm" className="relative flex-shrink-0 h-9 active:scale-95">
+              <Filter className="w-3.5 h-3.5 mr-1.5" />
               Species
               {selectedSpecies.length > 0 && (
-                <Badge className="ml-2 h-5 w-5 p-0 flex items-center justify-center">
+                <Badge className="ml-1.5 h-4 w-4 p-0 flex items-center justify-center text-[10px]">
                   {selectedSpecies.length}
                 </Badge>
               )}
@@ -146,10 +147,16 @@ export function PlantGalleryFilters({
 
       {/* Clear Filters */}
       {activeFilterCount > 0 && (
-        <Button variant="ghost" onClick={handleClearFilters}>
-          Clear {activeFilterCount} {activeFilterCount === 1 ? "filter" : "filters"}
+        <Button 
+          variant="ghost" 
+          size="sm"
+          onClick={handleClearFilters}
+          className="flex-shrink-0 h-9 active:scale-95 text-muted-foreground"
+        >
+          Clear ({activeFilterCount})
         </Button>
       )}
+      </div>
     </div>
   )
 }

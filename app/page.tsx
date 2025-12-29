@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react"
 import useSWR, { mutate } from "swr"
 import { Header } from "@/components/header"
+import { MobileNav } from "@/components/mobile-nav"
 import { PlantCard } from "@/components/plant-card"
 import { AddPlantModal } from "@/components/add-plant-modal"
 import { EditPlantModal } from "@/components/edit-plant-modal"
@@ -63,27 +64,32 @@ export default function Home() {
     return needsWater || needsFertilizer
   }).length
 
-  const handleImageSelected = async (file: File, name: string, location: string) => {
+  const handleImageSelected = async (files: File[], name: string, location: string) => {
     try {
-      // Upload the image
-      const formData = new FormData()
-      formData.append("file", file)
-      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData })
-      
-      if (!uploadRes.ok) {
-        const error = await uploadRes.json()
-        throw new Error(error.error || "Upload failed")
-      }
-      
-      const { url } = await uploadRes.json()
+      // Upload all images
+      const uploadPromises = files.map(async (file) => {
+        const formData = new FormData()
+        formData.append("file", file)
+        const uploadRes = await fetch("/api/upload", { method: "POST", body: formData })
+        
+        if (!uploadRes.ok) {
+          const error = await uploadRes.json()
+          throw new Error(error.error || "Upload failed")
+        }
+        
+        const { url } = await uploadRes.json()
+        return url
+      })
 
-      // Create import session with name and location
+      const imageUrls = await Promise.all(uploadPromises)
+
+      // Create import session with name, location, and first image
       const sessionRes = await fetch("/api/import-sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           status: "uploading", 
-          image_url: url,
+          image_url: imageUrls[0], // Primary image
           plant_name: name,
           plant_location: location
         }),
@@ -101,11 +107,11 @@ export default function Home() {
 
       mutate("/api/import-sessions")
 
-      // Start the identification process
+      // Start the identification process with the first image
       const identifyRes = await fetch("/api/identify-plant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl: url, sessionId: session.id }),
+        body: JSON.stringify({ imageUrl: imageUrls[0], sessionId: session.id, additionalPhotos: imageUrls.slice(1) }),
       })
 
       if (!identifyRes.ok) {
@@ -144,7 +150,7 @@ export default function Home() {
         body: JSON.stringify({
           name: plantData.name,
           species: plantData.species || null,
-          scientific_name: null,
+          scientific_name: correctingSession?.scientific_name || null,
           image_url: correctingSession?.image_url || null,
           location: plantData.location,
           sunlight_level: plantData.sunlight_level,
@@ -157,7 +163,7 @@ export default function Home() {
           humidity_preference: plantData.humidity_preference,
           temperature_range: plantData.temperature_range,
           care_notes: plantData.care_notes,
-          sources: [],
+          sources: correctingSession?.research_sources || [],
         }),
       })
 
@@ -269,7 +275,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex flex-col h-full bg-background overflow-hidden">
       <Header
         view={view}
         onViewChange={setView}
@@ -279,37 +285,37 @@ export default function Home() {
       />
 
       {activeSessions.length > 0 && (
-        <div className="bg-primary/5 border-b">
-          <div className="container mx-auto px-4 py-3">
+        <div className="bg-primary/5 border-b flex-shrink-0">
+          <div className="px-4 py-2.5">
             <button
               onClick={() => setImportSidebarOpen(true)}
-              className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+              className="flex items-center gap-2 text-xs font-medium text-primary active:opacity-70"
             >
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
               {activeSessions.length} plant{activeSessions.length > 1 ? "s" : ""} importing...
             </button>
           </div>
         </div>
       )}
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="flex-1 overflow-y-auto overscroll-contain pb-20">
         {plants.length === 0 ? (
-          <div className="text-center py-20">
-            <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
-              <Leaf className="w-12 h-12 text-primary" />
+          <div className="text-center py-12 px-4">
+            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+              <Leaf className="w-10 h-10 text-primary" />
             </div>
-            <h2 className="text-2xl font-semibold mb-2">No plants yet</h2>
-            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+            <h2 className="text-xl font-semibold mb-2">No plants yet</h2>
+            <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
               Start building your plant collection by taking a photo. Our AI will identify the plant and find its care
               requirements.
             </p>
-            <Button size="lg" onClick={() => setAddModalOpen(true)}>
+            <Button size="lg" onClick={() => setAddModalOpen(true)} className="active:scale-95">
               <Plus className="w-5 h-5 mr-2" />
               Add Your First Plant
             </Button>
           </div>
         ) : view === "grid" ? (
-          <>
+          <div className="px-4">
             <PlantGalleryFilters
               plants={plants}
               searchQuery={searchQuery}
@@ -319,7 +325,7 @@ export default function Home() {
               selectedSpecies={selectedSpecies}
               onSpeciesChange={setSelectedSpecies}
             />
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 xs:grid-cols-2 gap-4 pb-4">
               {filteredPlants.map((plant) => (
                 <PlantCard
                   key={plant.id}
@@ -334,7 +340,7 @@ export default function Home() {
             </div>
             {filteredPlants.length === 0 && (
               <div className="text-center py-12">
-                <p className="text-muted-foreground">No plants match your filters</p>
+                <p className="text-sm text-muted-foreground">No plants match your filters</p>
                 <Button
                   variant="link"
                   onClick={() => {
@@ -342,15 +348,15 @@ export default function Home() {
                     setSelectedLocations([])
                     setSelectedSpecies([])
                   }}
-                  className="mt-2"
+                  className="mt-2 active:scale-95"
                 >
                   Clear filters
                 </Button>
               </div>
             )}
-          </>
+          </div>
         ) : (
-          <div className="max-w-2xl mx-auto">
+          <div className="px-4">
             <ScheduleView 
               plants={plants} 
               onWater={handleWater} 
@@ -365,7 +371,10 @@ export default function Home() {
         open={addModalOpen}
         onOpenChange={setAddModalOpen}
         onImageSelected={handleImageSelected}
-        onManualAdd={() => setManualFormOpen(true)}
+        onManualAdd={() => {
+          setCorrectingSession(null)
+          setManualFormOpen(true)
+        }}
       />
 
       <ManualPlantForm
@@ -379,9 +388,17 @@ export default function Home() {
         onSubmit={handleManualAdd}
         initialData={correctingSession ? {
           name: correctingSession.plant_name || "",
+          species: correctingSession.identified_species || "",
           location: correctingSession.plant_location || "",
+          watering_frequency_days: correctingSession.care_requirements?.watering_frequency_days,
+          fertilizing_frequency_days: correctingSession.care_requirements?.fertilizing_frequency_days,
+          sunlight_level: correctingSession.care_requirements?.sunlight_level,
+          humidity_preference: correctingSession.care_requirements?.humidity_preference,
+          temperature_range: correctingSession.care_requirements?.temperature_range,
+          care_notes: correctingSession.care_requirements?.care_notes,
         } : undefined}
         sessionToComplete={correctingSession?.id || null}
+        researchSources={correctingSession?.research_sources || []}
       />
 
       <EditPlantModal
@@ -410,6 +427,13 @@ export default function Home() {
         onFertilize={handleFertilize}
         onEdit={handleEdit}
         onDelete={handleDelete}
+      />
+
+      <MobileNav
+        view={view}
+        onViewChange={setView}
+        onAddPlant={() => setAddModalOpen(true)}
+        urgentCount={urgentCount}
       />
     </div>
   )
