@@ -36,9 +36,9 @@ services:
         until pg_isready -h db -p 5432 -U supabase_admin; do sleep 1; done
         # Run all scripts in-order on every start (idempotent).
         # This ensures server deployments with an existing DB volume still get schema updates.
-        for f in $(find /scripts -maxdepth 1 -type f -name "*.sql" | sort); do
-          echo "Running $${f}"
-          PGPASSWORD="$${POSTGRES_PASSWORD}" psql -v ON_ERROR_STOP=1 -h db -U supabase_admin -d postgres -f "$${f}"
+        for f in /scripts/*.sql; do
+          echo "Running $$f"
+          PGPASSWORD="$$POSTGRES_PASSWORD" psql -v ON_ERROR_STOP=1 -h db -U supabase_admin -d postgres -f "$$f"
         done
 
   auth:
