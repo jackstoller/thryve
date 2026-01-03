@@ -17,6 +17,10 @@ jobs:
           script: |
             cd /opt/docker/thryve
             git pull origin main
-            sudo docker-compose build web
-            sudo docker-compose up -d web
-            sudo docker image prune -f
+            
+            # Use 'docker compose' (space, not hyphen)
+            docker compose build web
+            docker compose up -d web
+            
+            # Cleanup old images
+            docker image prune -f
