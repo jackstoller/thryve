@@ -1,6 +1,9 @@
 -- Best-effort setup for local self-hosted Supabase-style roles.
 -- This is intentionally permissive and intended for local development.
 
+-- Required by some table defaults below (gen_random_uuid()).
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- NOTE: This script runs during DB initialization (fresh volume).
 -- It must be plain SQL (no psql meta-commands like \set), because not all
 -- entrypoints run init scripts through psql.

@@ -16,6 +16,12 @@ BEGIN
   -- Ensure it can access the Storage schema objects.
   EXECUTE 'GRANT USAGE ON SCHEMA storage TO service_role';
 
+  -- Public object reads (e.g. /storage/v1/object/public/...) commonly run as `anon`.
+  -- Without these grants, Storage may respond with 500 "permission denied".
+  -- RLS policies (created in scripts/007_create_storage_schema.sql) still limit access
+  -- to rows in public buckets.
+  EXECUTE 'GRANT USAGE ON SCHEMA storage TO anon, authenticated';
+
   -- Tighten existing objects
   EXECUTE 'REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated';
   EXECUTE 'REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated';
@@ -28,6 +34,9 @@ BEGIN
   EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA storage TO service_role';
   EXECUTE 'GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA storage TO service_role';
   EXECUTE 'GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA storage TO service_role';
+
+  -- Allow reading bucket/object metadata for public access paths.
+  EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA storage TO anon, authenticated';
 
   -- Tighten future objects created by migrations (supabase_admin owns most objects)
   EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated';
