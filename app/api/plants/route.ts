@@ -1,8 +1,8 @@
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 
 export async function GET() {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   console.log("[v0] Fetching plants from database")
 
@@ -18,7 +18,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const body = await req.json()
 
   console.log("[v0] Creating plant with body:", body)

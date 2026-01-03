@@ -2,8 +2,12 @@ import { generateObject } from "ai"
 import { z } from "zod"
 import { NextRequest, NextResponse } from "next/server"
 import * as cheerio from "cheerio"
+import { getModelEntries } from "@/lib/ai-provider"
 
-const MODELS = ["anthropic/claude-sonnet-4-20250514"]
+const MODEL_ENTRIES = getModelEntries({
+  openRouterModelIds: ["anthropic/claude-sonnet-4-20250514"],
+  fallbackOpenAIModelId: "gpt-4o",
+})
 
 // Schema for care research from a single source
 const careResearchSchema = z.object({
@@ -346,8 +350,14 @@ Provide:
 13. care_notes: ONLY direct quotes or paraphrases from the content. If no specific care tips, say "No specific care information available from this source"
 14. confidence: Your overall confidence score (0-1) that the information came from the source`
 
+        if (MODEL_ENTRIES.length === 0) {
+          throw new Error(
+            "No AI provider configured. Set OPENROUTER_API_KEY for OpenRouter (recommended) or OPENAI_API_KEY for OpenAI."
+          )
+        }
+
         const result_obj = await generateObject({
-          model: MODELS[0],
+          model: MODEL_ENTRIES[0].model as any,
           schema: careResearchSchema,
           messages: [
             {

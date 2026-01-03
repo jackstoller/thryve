@@ -1,3 +1,6 @@
+-- Ensure required extensions exist
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- Create plants table for storing user's plants
 CREATE TABLE IF NOT EXISTS plants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,30 +1,10 @@
-# Plant tracker app
+# Thryve
 
-*Automatically synced with your [v0.app](https://v0.app) deployments*
+Plant tracker app with Supabase-backed storage and optional AI-powered plant identification.
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/jas591-2506s-projects/v0-plant-tracker-app)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.app-black?style=for-the-badge)](https://v0.app/chat/eAghq1Blv9Y)
+## Self-hosting
 
-## Overview
+This repo is set up to run locally with Docker Compose (Next.js + a local Supabase stack).
 
-This repository will stay in sync with your deployed chats on [v0.app](https://v0.app).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.app](https://v0.app).
-
-## Deployment
-
-Your project is live at:
-
-**[https://vercel.com/jas591-2506s-projects/v0-plant-tracker-app](https://vercel.com/jas591-2506s-projects/v0-plant-tracker-app)**
-
-## Build your app
-
-Continue building your app on:
-
-**[https://v0.app/chat/eAghq1Blv9Y](https://v0.app/chat/eAghq1Blv9Y)**
-
-## How It Works
-
-1. Create and modify your project using [v0.app](https://v0.app)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+- Setup + run instructions: [SELF_HOSTING.md](SELF_HOSTING.md)
+- External APIs used by the app (GPT/search/etc.) are listed in: [SELF_HOSTING.md](SELF_HOSTING.md)

@@ -1,18 +1,120 @@
 import { generateObject, generateText } from "ai"
 import { z } from "zod"
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import * as cheerio from "cheerio"
+import { getModelEntries } from "@/lib/ai-provider"
 
-// Multiple models for cross-validation
-const MODELS = [
-  "anthropic/claude-sonnet-4-20250514",
-  "openai/gpt-4o",
-  "google/gemini-2.0-flash-exp:free",
-]
+export const runtime = "nodejs"
+
+const MODEL_ENTRIES = getModelEntries({
+  // These IDs are OpenRouter model IDs.
+  // If OPENROUTER_API_KEY is not set, we fall back to OpenAI directly.
+  openRouterModelIds: [
+    "anthropic/claude-sonnet-4-20250514",
+    "openai/gpt-4o",
+    "google/gemini-2.0-flash-exp:free",
+  ],
+  fallbackOpenAIModelId: "gpt-4o",
+})
 
 const CONFIDENCE_THRESHOLD = 0.6 // Minimum average confidence to accept identification
 const MIN_AGREEMENT_RATIO = 0.67 // At least 2 out of 3 models must agree
 const MAX_CONFIDENCE_VARIANCE = 0.35 // Maximum variance in confidence scores to accept
+
+function isPrivateOrLocalhost(hostname: string) {
+  const host = hostname.toLowerCase()
+
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "0.0.0.0") return true
+
+  // Very small guardrail: common RFC1918 ranges
+  if (host.startsWith("10.")) return true
+  if (host.startsWith("192.168.")) return true
+  if (host.startsWith("172.")) {
+    const parts = host.split(".")
+    const secondOctet = Number(parts[1])
+    if (Number.isFinite(secondOctet) && secondOctet >= 16 && secondOctet <= 31) return true
+  }
+
+  // Link-local (often not reachable from hosted environments)
+  if (host.startsWith("169.254.")) return true
+
+  return false
+}
+
+async function getModelImageInput(imageUrl: string): Promise<string> {
+  // If it's already a data URL, just pass through.
+  if (imageUrl.startsWith("data:")) return imageUrl
+
+  // `blob:` URLs are browser-only and cannot be fetched server-side.
+  if (imageUrl.startsWith("blob:")) {
+    throw new Error(
+      "Invalid imageUrl for server-side AI analysis: received a 'blob:' URL. Upload the image first and pass a public HTTP(S) URL or a data: URL."
+    )
+  }
+
+  // Relative URLs also won't work without a request origin to resolve against.
+  if (imageUrl.startsWith("/")) {
+    throw new Error(
+      "Invalid imageUrl for server-side AI analysis: received a relative URL. Pass an absolute http(s) URL (e.g. from Supabase Storage) or a data: URL."
+    )
+  }
+
+  // If the URL is public, most providers can fetch it directly.
+  // If it's localhost/private, we must fetch it server-side and inline it as base64.
+  let parsed: URL | null = null
+  try {
+    parsed = new URL(imageUrl)
+  } catch {
+    parsed = null
+  }
+
+  const shouldInline = parsed ? isPrivateOrLocalhost(parsed.hostname) : true
+  if (!shouldInline) return imageUrl
+
+  // In Docker, `localhost` inside the container is NOT your host.
+  // Our docker-compose sets `SUPABASE_URL=http://kong:8000` for server-side calls.
+  // If the client stored a public URL like `http://localhost:54321/...`, rewrite it
+  // to the Docker-internal gateway so we can fetch and inline the bytes.
+  let fetchUrl = imageUrl
+  if (parsed && isPrivateOrLocalhost(parsed.hostname)) {
+    const internalSupabaseUrl = process.env.SUPABASE_URL
+    if (internalSupabaseUrl && !internalSupabaseUrl.includes("localhost")) {
+      try {
+        const rewritten = new URL(parsed.pathname + parsed.search, internalSupabaseUrl)
+        fetchUrl = rewritten.toString()
+      } catch {
+        // Ignore rewrite failures and fall back to the original URL.
+      }
+    }
+  }
+
+  let res: Response
+  try {
+    res = await fetch(fetchUrl, { signal: AbortSignal.timeout(10_000) })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(
+      `Failed to fetch imageUrl for AI analysis. This is usually a network/DNS issue, a non-public URL, or a localhost URL from inside Docker. url=${imageUrl} fetchUrl=${fetchUrl} error=${message}`
+    )
+  }
+  if (!res.ok) {
+    throw new Error(`Failed to download image for AI analysis (HTTP ${res.status})`)
+  }
+
+  const contentType = res.headers.get("content-type") || "image/jpeg"
+  const arrayBuffer = await res.arrayBuffer()
+
+  // Avoid sending extremely large payloads to the model provider.
+  const maxBytes = 8 * 1024 * 1024
+  if (arrayBuffer.byteLength > maxBytes) {
+    throw new Error(
+      `Image is too large to inline for AI analysis (${Math.round(arrayBuffer.byteLength / 1024 / 1024)}MB). Please upload a smaller image.`
+    )
+  }
+
+  const base64 = Buffer.from(arrayBuffer).toString("base64")
+  return `data:${contentType};base64,${base64}`
+}
 
 // Schema for plant identification
 const identificationSchema = z.object({
@@ -50,9 +152,12 @@ const consolidatedCareSchema = z.object({
   care_notes: z.string(),
 })
 
-async function identifyPlantWithModel(imageUrl: string, model: string) {
+async function identifyPlantWithModel(imageUrl: string, modelEntry: { id: string; model: unknown }) {
+  const modelImage = await getModelImageInput(imageUrl)
+
   const result = await generateObject({
-    model: model,
+    // `generateObject` expects a model instance, not a string.
+    model: modelEntry.model as any,
     schema: identificationSchema,
     messages: [
       {
@@ -60,7 +165,7 @@ async function identifyPlantWithModel(imageUrl: string, model: string) {
         content: [
           {
             type: "image",
-            image: imageUrl,
+            image: modelImage,
           },
           {
             type: "text",
@@ -95,13 +200,19 @@ If the image does not contain a plant (e.g., a person, object, or non-plant item
 
 async function identifyPlant(imageUrl: string) {
   try {
-    console.log(`[Identification] Starting identification with ${MODELS.length} AI models...`)
+    if (MODEL_ENTRIES.length === 0) {
+      throw new Error(
+        "No AI provider configured. Set OPENROUTER_API_KEY for OpenRouter (recommended) or OPENAI_API_KEY for OpenAI."
+      )
+    }
+
+    console.log(`[Identification] Starting identification with ${MODEL_ENTRIES.length} AI models...`)
     
     // Query all models in parallel
     const identifications = await Promise.allSettled(
-      MODELS.map((model) => {
-        console.log(`[Identification] Querying ${model}...`)
-        return identifyPlantWithModel(imageUrl, model)
+      MODEL_ENTRIES.map((entry) => {
+        console.log(`[Identification] Querying ${entry.id}...`)
+        return identifyPlantWithModel(imageUrl, entry)
       })
     )
 
@@ -112,10 +223,22 @@ async function identifyPlant(imageUrl: string) {
       )
       .map((result) => result.value)
 
-    console.log(`[Identification] ${successfulResults.length}/${MODELS.length} models responded successfully`)
+    console.log(`[Identification] ${successfulResults.length}/${MODEL_ENTRIES.length} models responded successfully`)
 
     if (successfulResults.length === 0) {
-      throw new Error("All identification models failed")
+      const failureSummaries = identifications
+        .map((r, i) => {
+          if (r.status === "fulfilled") return null
+          const modelId = MODEL_ENTRIES[i]?.id ?? `model_${i + 1}`
+          const message = r.reason instanceof Error ? r.reason.message : String(r.reason)
+          return `${modelId}: ${message}`
+        })
+        .filter(Boolean)
+        .join(" | ")
+
+      throw new Error(
+        `All identification models failed${failureSummaries ? ` (${failureSummaries})` : ""}`
+      )
     }
 
       // Log individual model results
@@ -572,8 +695,14 @@ Provide:
 13. care_notes: ONLY direct quotes or paraphrases from the content. If no specific care tips, say "No specific care information available from this source"
 14. confidence: Your overall confidence score (0-1) that the information came from the source`
 
+        if (MODEL_ENTRIES.length === 0) {
+          throw new Error(
+            "No AI provider configured. Set OPENROUTER_API_KEY for OpenRouter (recommended) or OPENAI_API_KEY for OpenAI."
+          )
+        }
+
         const result_obj = await generateObject({
-          model: MODELS[0],
+          model: MODEL_ENTRIES[0].model as any,
           schema: careResearchSchema,
           messages: [
             {
@@ -678,7 +807,7 @@ function consolidateCareRequirements(sources: z.infer<typeof careResearchSchema>
 
 // Background processing function
 async function processPlantIdentification(sessionId: string, imageUrl: string, additionalPhotos: string[] = []) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   try {
     console.log(`[Processing] Starting identification for session ${sessionId}`)
@@ -867,7 +996,7 @@ export async function POST(req: Request) {
       return Response.json({ error: "Missing imageUrl or sessionId" }, { status: 400 })
     }
 
-    const supabase = await createClient()
+    const supabase = createAdminClient()
 
     // Verify session exists
     const { data: session, error: sessionError } = await supabase

@@ -1,0 +1,181 @@
+services:
+  # ----------------------
+  # Supabase (self-hosted)
+  # ----------------------
+  db:
+    image: supabase/postgres:15.8.1.085
+    container_name: thryve-db
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "54322:5432"
+    volumes:
+      - supabase-db:/var/lib/postgresql/data
+      # Your app migrations (run once on fresh volume)
+      - ./scripts:/docker-entrypoint-initdb.d:ro
+
+  # Ensures DB roles have the expected passwords even when the DB volume already exists.
+  # This avoids Auth/REST/Storage/Reatime crash-looping due to stale credentials.
+  db-init:
+    image: postgres:15-alpine
+    container_name: thryve-db-init
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - ./scripts:/scripts:ro
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        until pg_isready -h db -p 5432 -U supabase_admin; do sleep 1; done
+        PGPASSWORD="$${POSTGRES_PASSWORD}" psql -h db -U supabase_admin -d postgres -f /scripts/000_set_supabase_role_passwords.sql
+
+  auth:
+    image: supabase/gotrue:v2.184.0
+    container_name: thryve-auth
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:54321}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      GOTRUE_SITE_URL: http://localhost:3000
+      GOTRUE_URI_ALLOW_LIST: http://localhost:3000
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      # Local dev convenience: don’t require SMTP
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+
+  rest:
+    image: postgrest/postgrest:v14.1
+    container_name: thryve-rest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public,storage
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+
+  realtime:
+    image: supabase/realtime:v2.68.0
+    container_name: thryve-realtime
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: postgres
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_AFTER_CONNECT_QUERY: "SET search_path TO _realtime"
+      DB_ENC_KEY: supabaserealtime
+      API_JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-this-is-not-secure-change-me-in-dotenv}
+      ERL_AFLAGS: "-proto_dist inet_tcp"
+      DNS_NODES: "''"
+      RLIMIT_NOFILE: "10000"
+      APP_NAME: realtime
+      SEED_SELF_HOST: "true"
+      RUN_JANITOR: "true"
+
+  storage:
+    image: supabase/storage-api:v1.33.0
+    container_name: thryve-storage
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+      rest:
+        condition: service_started
+    env_file: .env
+    volumes:
+      - supabase-storage:/var/lib/storage
+    environment:
+      POSTGREST_URL: http://rest:3000
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      REQUEST_ALLOW_X_FORWARDED_PATH: "true"
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      FILE_SIZE_LIMIT: 52428800
+      REGION: local
+      GLOBAL_S3_BUCKET: local
+      TENANT_ID: local
+
+  kong:
+    image: kong:latest
+    container_name: thryve-kong
+    restart: unless-stopped
+    depends_on:
+      - auth
+      - rest
+      - storage
+      - realtime
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+    ports:
+      # Supabase-style API gateway
+      - "54321:8000"
+      # Optional Kong admin (local only)
+      - "54324:8001"
+    volumes:
+      - ./docker/kong/kong.yml:/etc/kong/kong.yml:ro
+
+  # ----------------------
+  # App
+  # ----------------------
+  web:
+    container_name: thryve-web
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    restart: unless-stopped
+    depends_on:
+      - kong
+    env_file: .env
+    environment:
+      # Ensure server-side requests use Docker-internal URL
+      SUPABASE_URL: http://kong:8000
+    ports:
+      - "3000:3000"
+
+volumes:
+  supabase-db:
+  supabase-storage:
