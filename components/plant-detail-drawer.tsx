@@ -5,9 +5,14 @@ import useSWR, { mutate } from "swr"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -24,8 +29,6 @@ import {
   Edit,
   Trash2,
   History,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react"
 import type { Plant, CareHistoryItem } from "@/lib/types"
 import { format, formatDistanceToNow, isPast, isToday, differenceInDays } from "date-fns"
@@ -71,6 +74,24 @@ export function PlantDetailDrawer({
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
   const [loadingAction, setLoadingAction] = useState<"water" | "fertilize" | null>(null)
 
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+
+  const [historyEditMode, setHistoryEditMode] = useState(false)
+  const [historySavingId, setHistorySavingId] = useState<string | "new" | null>(null)
+  const [historyJustSavedId, setHistoryJustSavedId] = useState<string | "new" | null>(null)
+  const [historyDrafts, setHistoryDrafts] = useState<
+    Record<string, { care_type: "water" | "fertilize"; performed_at: string; notes: string }>
+  >({})
+  const [newHistory, setNewHistory] = useState<{ care_type: "water" | "fertilize"; performed_at: string; notes: string }>({
+    care_type: "water",
+    performed_at: "",
+    notes: "",
+  })
+
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const containerScrollRaf = useRef<number | null>(null)
+  const galleryRef = useRef<HTMLDivElement | null>(null)
+
   const [waterCelebrateKey, setWaterCelebrateKey] = useState(0)
   const [fertilizeCelebrateKey, setFertilizeCelebrateKey] = useState(0)
   const [waterPopping, setWaterPopping] = useState(false)
@@ -84,6 +105,46 @@ export function PlantDetailDrawer({
   )
 
   const careHistoryArray = Array.isArray(careHistory) ? careHistory : []
+
+  const isoToLocalInput = (iso: string) => {
+    const d = new Date(iso)
+    const pad = (n: number) => String(n).padStart(2, "0")
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  const localInputToIso = (value: string) => {
+    const d = new Date(value)
+    return d.toISOString()
+  }
+
+  const flashSaved = (id: string | "new") => {
+    setHistoryJustSavedId(id)
+    window.setTimeout(() => {
+      setHistoryJustSavedId((prev) => (prev === id ? null : prev))
+    }, 900)
+  }
+
+  useEffect(() => {
+    if (!historyEditMode) return
+    setHistoryDrafts((prev) => {
+      const next = { ...prev }
+      for (const entry of careHistoryArray) {
+        if (next[entry.id]) continue
+        next[entry.id] = {
+          care_type: entry.care_type,
+          performed_at: isoToLocalInput(entry.performed_at),
+          notes: entry.notes ?? "",
+        }
+      }
+      return next
+    })
+
+    setNewHistory((prev) => ({
+      ...prev,
+      performed_at: prev.performed_at || isoToLocalInput(new Date().toISOString()),
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyEditMode, plant?.id, careHistoryArray.length])
 
   useEffect(() => {
     const checkMobile = () => {
@@ -136,19 +197,24 @@ export function PlantDetailDrawer({
   
   const hasMultiplePhotos = photos.length > 1
 
-  const handlePrevPhoto = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setCurrentPhotoIndex((prev) => (prev === 0 ? photos.length - 1 : prev - 1))
-  }
-
-  const handleNextPhoto = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setCurrentPhotoIndex((prev) => (prev === photos.length - 1 ? 0 : prev + 1))
-  }
-
   const handleDotClick = (e: React.MouseEvent, index: number) => {
     e.stopPropagation()
     setCurrentPhotoIndex(index)
+
+    const el = galleryRef.current
+    if (!el) return
+    const width = el.clientWidth
+    el.scrollTo({ left: width * index, behavior: "smooth" })
+  }
+
+  const handleGalleryScroll = () => {
+    const el = galleryRef.current
+    if (!el) return
+    const width = el.clientWidth || 1
+    const nextIndex = Math.round(el.scrollLeft / width)
+    if (nextIndex !== currentPhotoIndex) {
+      setCurrentPhotoIndex(nextIndex)
+    }
   }
 
   const getSunlightLabel = (level: string | null) => {
@@ -192,46 +258,51 @@ export function PlantDetailDrawer({
   // Shared content component
   const renderContent = (useDialogTitle: boolean = false, fullScreen: boolean = false) => (
     <div
+      ref={containerRef}
       className={
         fullScreen
           ? "overflow-y-auto h-full rounded-none"
           : "overflow-y-auto max-h-[90vh] rounded-lg"
       }
+      onScroll={(e) => {
+        const target = e.currentTarget
+        if (containerScrollRaf.current) {
+          cancelAnimationFrame(containerScrollRaf.current)
+        }
+        containerScrollRaf.current = requestAnimationFrame(() => {
+          const y = Math.min(40, Math.max(0, target.scrollTop * 0.12))
+          containerRef.current?.style.setProperty("--thryve-parallax-y", `${y}px`)
+        })
+      }}
     >
       {/* Photo Gallery with Carousel */}
       {photos.length > 0 ? (
-        <div className="relative h-64 bg-muted group">
-          <img 
-            src={photos[currentPhotoIndex].url} 
-            alt={`${plant.name} ${currentPhotoIndex + 1}`} 
-            loading="eager"
-            decoding="async"
-            fetchPriority="high"
-            className="w-full h-full object-cover transition-opacity duration-300" 
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+        <div className="relative h-[28rem] sm:h-[32rem] bg-muted group">
+          <div
+            ref={galleryRef}
+            onScroll={handleGalleryScroll}
+            className="h-full flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            {photos.map((photo, idx) => (
+              <div key={photo.id} className="w-full h-full flex-shrink-0 snap-center">
+                <img
+                  src={photo.url}
+                  alt={`${plant.name} ${idx + 1}`}
+                  loading={idx === 0 ? "eager" : "lazy"}
+                  decoding="async"
+                  fetchPriority={idx === 0 ? "high" : "low"}
+                  className="w-full h-full object-cover will-change-transform"
+                  style={{ transform: "translate3d(0,var(--thryve-parallax-y,0px),0) scale(1.06)" }}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
 
-          {/* Carousel Navigation */}
+          {/* Photo Indicators */}
           {hasMultiplePhotos && (
             <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute left-4 top-1/2 -translate-y-1/2 bg-background/80 backdrop-blur-sm hover:bg-background h-10 w-10 z-20"
-                onClick={handlePrevPhoto}
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-4 top-1/2 -translate-y-1/2 bg-background/80 backdrop-blur-sm hover:bg-background h-10 w-10 z-20"
-                onClick={handleNextPhoto}
-              >
-                <ChevronRight className="w-5 h-5" />
-              </Button>
-              
-              {/* Photo Dots Indicator */}
               <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex gap-1.5 z-20">
                 {photos.map((_, index) => (
                   <button
@@ -247,8 +318,7 @@ export function PlantDetailDrawer({
                 ))}
               </div>
 
-              {/* Photo Counter */}
-              <div className="absolute top-4 left-4 bg-background/80 backdrop-blur-sm px-2 py-1 rounded-full text-xs font-medium z-20">
+              <div className="pointer-events-none absolute top-4 left-4 bg-background/80 backdrop-blur-sm px-2 py-1 rounded-full text-xs font-medium z-20">
                 {currentPhotoIndex + 1} / {photos.length}
               </div>
             </>
@@ -267,7 +337,7 @@ export function PlantDetailDrawer({
           )}
 
           {/* Plant Name Overlay */}
-          <div className="absolute bottom-0 left-0 right-0 p-6 text-white z-10">
+          <div className="pointer-events-none absolute bottom-0 left-0 right-0 p-6 text-white z-10">
             {useDialogTitle ? (
               <DialogTitle className="text-3xl font-bold mb-1">{plant.name}</DialogTitle>
             ) : (
@@ -322,15 +392,18 @@ export function PlantDetailDrawer({
           {/* Action Buttons */}
           <div className="flex gap-3">
             <Button
-              variant="outline"
+              variant="default"
               disabled={loadingAction !== null}
               aria-busy={loadingAction === "water"}
-              className={`relative flex-1 bg-card/60 hover:bg-accent active:bg-accent active:opacity-80 transition-transform active:scale-[0.97] ${waterPopping ? "thryve-press-pop" : ""}`}
+              className={`relative flex-1 transition-transform active:scale-[0.97] text-white bg-gradient-to-r from-blue-500 to-blue-600 active:from-blue-600 active:to-blue-700 ${waterPopping ? "thryve-press-pop" : ""}`}
               onClick={async () => {
                 setLoadingAction("water")
                 try {
                   await onWater(plant.id)
-                  mutate(`/api/plants/${plant.id}/history`)
+                  await Promise.all([
+                    mutate(`/api/plants/${plant.id}/history`),
+                    mutate("/api/plants"),
+                  ])
                   triggerCelebrate("water")
                 } finally {
                   setLoadingAction(null)
@@ -358,19 +431,22 @@ export function PlantDetailDrawer({
                   ))}
                 </span>
               )}
-              <Droplets className="w-4 h-4 mr-2 text-[var(--water-blue)]" />
-              {loadingAction === "water" ? "Watering…" : needsWater ? "Water Now" : "Mark Watered"}
+              <Droplets className="w-4 h-4 mr-2" />
+              {loadingAction === "water" ? "Watering…" : "Water"}
             </Button>
             <Button
-              variant="outline"
+              variant="default"
               disabled={loadingAction !== null}
               aria-busy={loadingAction === "fertilize"}
-              className={`relative flex-1 bg-card/60 hover:bg-accent active:bg-accent active:opacity-80 transition-transform active:scale-[0.97] ${fertilizePopping ? "thryve-press-pop" : ""}`}
+              className={`relative flex-1 transition-transform active:scale-[0.97] text-white bg-gradient-to-r from-amber-500 to-amber-600 active:from-amber-600 active:to-amber-700 ${fertilizePopping ? "thryve-press-pop" : ""}`}
               onClick={async () => {
                 setLoadingAction("fertilize")
                 try {
                   await onFertilize(plant.id)
-                  mutate(`/api/plants/${plant.id}/history`)
+                  await Promise.all([
+                    mutate(`/api/plants/${plant.id}/history`),
+                    mutate("/api/plants"),
+                  ])
                   triggerCelebrate("fertilize")
                 } finally {
                   setLoadingAction(null)
@@ -398,8 +474,8 @@ export function PlantDetailDrawer({
                   ))}
                 </span>
               )}
-              <Leaf className="w-4 h-4 mr-2 text-[var(--fertilizer-amber)]" />
-              {loadingAction === "fertilize" ? "Feeding…" : needsFertilizer ? "Feed Now" : "Mark Fed"}
+              <Leaf className="w-4 h-4 mr-2" />
+              {loadingAction === "fertilize" ? "Feeding…" : "Feed"}
             </Button>
           </div>
 
@@ -548,38 +624,6 @@ export function PlantDetailDrawer({
             </Card>
           )}
 
-          {/* Research Sources */}
-          {plant.sources && plant.sources.length > 0 && (
-            <Card>
-              <CardContent className="p-6">
-                <h3 className="font-semibold mb-3">Research Sources</h3>
-                <div className="space-y-2">
-                  {plant.sources.map((source, idx) => (
-                    <a
-                      key={idx}
-                      href={source.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors group"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm group-hover:text-primary transition-colors">
-                          {source.name}
-                        </p>
-                        {source.recommendation && (
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                            {source.recommendation}
-                          </p>
-                        )}
-                      </div>
-                      <ExternalLink className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0 ml-2" />
-                    </a>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Care History */}
           <Card>
             <CardContent className="p-6">
@@ -588,14 +632,257 @@ export function PlantDetailDrawer({
                   <History className="w-5 h-5 text-primary" />
                   <h3 className="font-semibold text-lg">Care History</h3>
                 </div>
-                {careHistoryArray.length > 0 && (
-                  <Badge variant="secondary" className="text-xs">
-                    {careHistoryArray.length} {careHistoryArray.length === 1 ? 'entry' : 'entries'}
-                  </Badge>
-                )}
+                <div className="flex items-center gap-2">
+                  {careHistoryArray.length > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {careHistoryArray.length} {careHistoryArray.length === 1 ? 'entry' : 'entries'}
+                    </Badge>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={historySavingId !== null}
+                    onClick={() => setHistoryEditMode((v) => !v)}
+                  >
+                    {historyEditMode ? "Done" : "Edit"}
+                  </Button>
+                </div>
               </div>
-              
-              {careHistoryArray.length === 0 ? (
+
+              {historyEditMode ? (
+                <div className="space-y-3">
+                  <div className="rounded-lg border p-3 bg-muted/20">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">Type</div>
+                        <Select
+                          value={newHistory.care_type}
+                          onValueChange={(v: "water" | "fertilize") => setNewHistory((p) => ({ ...p, care_type: v }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="water">Water</SelectItem>
+                            <SelectItem value="fertilize">Feed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1 sm:col-span-2">
+                        <div className="text-xs text-muted-foreground">Date</div>
+                        <Input
+                          type="datetime-local"
+                          value={newHistory.performed_at}
+                          onChange={(e) => setNewHistory((p) => ({ ...p, performed_at: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 mt-2">
+                      <div className="text-xs text-muted-foreground">Notes (optional)</div>
+                      <Textarea
+                        value={newHistory.notes}
+                        onChange={(e) => setNewHistory((p) => ({ ...p, notes: e.target.value }))}
+                        rows={2}
+                      />
+                    </div>
+
+                    <div className="flex justify-end mt-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={historySavingId !== null || !newHistory.performed_at}
+                        onClick={async () => {
+                          if (!plant) return
+                          setHistorySavingId("new")
+                          try {
+                            const res = await fetch(`/api/plants/${plant.id}/history`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                care_type: newHistory.care_type,
+                                performed_at: localInputToIso(newHistory.performed_at),
+                                notes: newHistory.notes || null,
+                              }),
+                            })
+                            if (!res.ok) {
+                              const data = await res.json().catch(() => ({}))
+                              throw new Error(data?.error || "Failed to add history")
+                            }
+
+                            await Promise.all([
+                              mutate(`/api/plants/${plant.id}/history`),
+                              mutate("/api/plants"),
+                            ])
+
+                            setNewHistory({
+                              care_type: "water",
+                              performed_at: isoToLocalInput(new Date().toISOString()),
+                              notes: "",
+                            })
+                            flashSaved("new")
+                          } catch (error) {
+                            alert(error instanceof Error ? error.message : "Failed to add history")
+                          } finally {
+                            setHistorySavingId(null)
+                          }
+                        }}
+                      >
+                        {historySavingId === "new" ? "Saving…" : historyJustSavedId === "new" ? "Saved" : "Add"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {careHistoryArray.length === 0 && (
+                    <div className="text-sm text-muted-foreground text-center py-2">
+                      No history yet — add your first record above.
+                    </div>
+                  )}
+
+                  <div className="space-y-2 max-h-[420px] overflow-y-auto pr-2">
+                    {careHistoryArray.map((entry) => {
+                      const draft = historyDrafts[entry.id]
+                      if (!draft) return null
+
+                      const isDirty =
+                        draft.care_type !== entry.care_type ||
+                        draft.performed_at !== isoToLocalInput(entry.performed_at) ||
+                        draft.notes !== (entry.notes ?? "")
+
+                      return (
+                        <div key={entry.id} className="rounded-lg border p-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <div className="space-y-1">
+                              <div className="text-xs text-muted-foreground">Type</div>
+                              <Select
+                                value={draft.care_type}
+                                onValueChange={(v: "water" | "fertilize") =>
+                                  setHistoryDrafts((p) => ({ ...p, [entry.id]: { ...p[entry.id], care_type: v } }))
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="water">Water</SelectItem>
+                                  <SelectItem value="fertilize">Feed</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-1 sm:col-span-2">
+                              <div className="text-xs text-muted-foreground">Date</div>
+                              <Input
+                                type="datetime-local"
+                                value={draft.performed_at}
+                                onChange={(e) =>
+                                  setHistoryDrafts((p) => ({ ...p, [entry.id]: { ...p[entry.id], performed_at: e.target.value } }))
+                                }
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1 mt-2">
+                            <div className="text-xs text-muted-foreground">Notes</div>
+                            <Textarea
+                              value={draft.notes}
+                              onChange={(e) =>
+                                setHistoryDrafts((p) => ({ ...p, [entry.id]: { ...p[entry.id], notes: e.target.value } }))
+                              }
+                              rows={2}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between mt-2">
+                            <div className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(entry.performed_at), { addSuffix: true })}
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={historySavingId !== null || !draft.performed_at || !isDirty}
+                                onClick={async () => {
+                                  if (!plant) return
+                                  setHistorySavingId(entry.id)
+                                  try {
+                                    const res = await fetch(`/api/plants/${plant.id}/history`, {
+                                      method: "PATCH",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({
+                                        id: entry.id,
+                                        care_type: draft.care_type,
+                                        performed_at: localInputToIso(draft.performed_at),
+                                        notes: draft.notes || null,
+                                      }),
+                                    })
+                                    if (!res.ok) {
+                                      const data = await res.json().catch(() => ({}))
+                                      throw new Error(data?.error || "Failed to save history")
+                                    }
+
+                                    await Promise.all([
+                                      mutate(`/api/plants/${plant.id}/history`),
+                                      mutate("/api/plants"),
+                                    ])
+                                    flashSaved(entry.id)
+                                  } catch (error) {
+                                    alert(error instanceof Error ? error.message : "Failed to save history")
+                                  } finally {
+                                    setHistorySavingId(null)
+                                  }
+                                }}
+                              >
+                                {historySavingId === entry.id ? "Saving…" : historyJustSavedId === entry.id ? "Saved" : "Save"}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive"
+                                disabled={historySavingId !== null}
+                                onClick={async () => {
+                                  if (!plant) return
+                                  setHistorySavingId(entry.id)
+                                  try {
+                                    const res = await fetch(`/api/plants/${plant.id}/history`, {
+                                      method: "DELETE",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ id: entry.id }),
+                                    })
+                                    if (!res.ok) {
+                                      const data = await res.json().catch(() => ({}))
+                                      throw new Error(data?.error || "Failed to remove history")
+                                    }
+
+                                    await Promise.all([
+                                      mutate(`/api/plants/${plant.id}/history`),
+                                      mutate("/api/plants"),
+                                    ])
+                                    setHistoryDrafts((p) => {
+                                      const next = { ...p }
+                                      delete next[entry.id]
+                                      return next
+                                    })
+                                  } catch (error) {
+                                    alert(error instanceof Error ? error.message : "Failed to remove history")
+                                  } finally {
+                                    setHistorySavingId(null)
+                                  }
+                                }}
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : careHistoryArray.length === 0 ? (
                 <div className="text-center py-8">
                   <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-muted flex items-center justify-center">
                     <History className="w-8 h-8 text-muted-foreground" />
@@ -684,6 +971,38 @@ export function PlantDetailDrawer({
             </CardContent>
           </Card>
 
+          {/* Research Sources (moved to end) */}
+          {plant.sources && plant.sources.length > 0 && (
+            <Card>
+              <CardContent className="p-6">
+                <h3 className="font-semibold mb-3">Research Sources</h3>
+                <div className="space-y-2">
+                  {plant.sources.map((source, idx) => (
+                    <a
+                      key={idx}
+                      href={source.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors group"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm group-hover:text-primary transition-colors">
+                          {source.name}
+                        </p>
+                        {source.recommendation && (
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                            {source.recommendation}
+                          </p>
+                        )}
+                      </div>
+                      <ExternalLink className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0 ml-2" />
+                    </a>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Actions */}
           <div className="flex gap-3">
             <Button variant="outline" className="flex-1" onClick={() => onEdit(plant)}>
@@ -693,17 +1012,39 @@ export function PlantDetailDrawer({
             <Button
               variant="outline"
               className="flex-1 text-destructive hover:bg-destructive hover:text-destructive-foreground"
-              onClick={() => {
-                if (confirm(`Are you sure you want to delete ${plant.name}?`)) {
-                  onDelete(plant.id)
-                  onClose()
-                }
-              }}
+              onClick={() => setDeleteConfirmOpen(true)}
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Delete
             </Button>
           </div>
+
+          <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Delete plant?</DialogTitle>
+                <DialogDescription>
+                  This permanently deletes {plant.name} and its care history.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => {
+                    onDelete(plant.id)
+                    setDeleteConfirmOpen(false)
+                    onClose()
+                  }}
+                >
+                  Delete
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     )

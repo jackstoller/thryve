@@ -4,6 +4,14 @@ import type { CSSProperties } from "react"
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Camera, Upload, X, GripVertical, Loader2 } from "lucide-react"
 import type { PlantPhoto } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -121,6 +129,8 @@ function SortablePhotoTile({
 export function PlantPhotosManager({ plantId, photos, onPhotosChange }: PlantPhotosManagerProps) {
   const [uploading, setUploading] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [pendingDeletePhotoId, setPendingDeletePhotoId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
@@ -176,9 +186,7 @@ export function PlantPhotosManager({ plantId, photos, onPhotosChange }: PlantPho
     }
   }
 
-  const handleDeletePhoto = async (photoId: string) => {
-    if (!confirm("Delete this photo?")) return
-
+  const deletePhotoNow = async (photoId: string) => {
     setDeleting(photoId)
     try {
       const res = await fetch(`/api/plants/${plantId}/photos?photoId=${photoId}`, {
@@ -197,6 +205,11 @@ export function PlantPhotosManager({ plantId, photos, onPhotosChange }: PlantPho
     } finally {
       setDeleting(null)
     }
+  }
+
+  const handleDeletePhoto = (photoId: string) => {
+    setPendingDeletePhotoId(photoId)
+    setDeleteDialogOpen(true)
   }
 
   const persistReorder = async (nextPhotos: PlantPhoto[], previousPhotos: PlantPhoto[]) => {
@@ -318,6 +331,39 @@ export function PlantPhotosManager({ plantId, photos, onPhotosChange }: PlantPho
         className="hidden"
         onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
       />
+
+      <Dialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open)
+          if (!open) setPendingDeletePhotoId(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete photo?</DialogTitle>
+            <DialogDescription>This removes the photo from this plant.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleting !== null}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleting !== null || !pendingDeletePhotoId}
+              onClick={async () => {
+                if (!pendingDeletePhotoId) return
+                await deletePhotoNow(pendingDeletePhotoId)
+                setDeleteDialogOpen(false)
+                setPendingDeletePhotoId(null)
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

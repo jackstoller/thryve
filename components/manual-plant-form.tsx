@@ -27,17 +27,32 @@ export interface ManualPlantData {
   location: string
   watering_frequency_days: number
   fertilizing_frequency_days: number
+  last_watered_days_ago?: number
+  last_fertilized_days_ago?: number
   sunlight_level: "low" | "medium" | "bright" | "direct"
   humidity_preference: string
   temperature_range: string
   care_notes: string
 }
 
-type ManualPlantFormState = Omit<ManualPlantData, "watering_frequency_days" | "fertilizing_frequency_days" | "sunlight_level"> & {
+type ManualPlantFormState = Omit<
+  ManualPlantData,
+  "watering_frequency_days" | "fertilizing_frequency_days" | "sunlight_level" | "last_watered_days_ago" | "last_fertilized_days_ago"
+> & {
   watering_frequency_days: string
   fertilizing_frequency_days: string
+  last_watered_days_ago: string
+  last_fertilized_days_ago: string
   sunlight_level: ManualPlantData["sunlight_level"] | ""
 }
+
+const LAST_CARE_OPTIONS: Array<{ label: string; daysAgo: number }> = [
+  { label: "Today", daysAgo: 0 },
+  { label: "3 days ago", daysAgo: 3 },
+  { label: "7 days ago", daysAgo: 7 },
+  { label: "14 days ago", daysAgo: 14 },
+  { label: "30 days ago", daysAgo: 30 },
+]
 
 export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, sessionToComplete, researchSources }: ManualPlantFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -57,6 +72,10 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
       typeof initialData?.watering_frequency_days === "number" ? String(initialData.watering_frequency_days) : "",
     fertilizing_frequency_days:
       typeof initialData?.fertilizing_frequency_days === "number" ? String(initialData.fertilizing_frequency_days) : "",
+    last_watered_days_ago:
+      typeof initialData?.last_watered_days_ago === "number" ? String(initialData.last_watered_days_ago) : "0",
+    last_fertilized_days_ago:
+      typeof initialData?.last_fertilized_days_ago === "number" ? String(initialData.last_fertilized_days_ago) : "0",
     sunlight_level: initialData?.sunlight_level || "",
     humidity_preference: initialData?.humidity_preference || "",
     temperature_range: initialData?.temperature_range || "",
@@ -75,6 +94,10 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
             typeof initialData.watering_frequency_days === "number" ? String(initialData.watering_frequency_days) : "",
           fertilizing_frequency_days:
             typeof initialData.fertilizing_frequency_days === "number" ? String(initialData.fertilizing_frequency_days) : "",
+          last_watered_days_ago:
+            typeof initialData.last_watered_days_ago === "number" ? String(initialData.last_watered_days_ago) : "0",
+          last_fertilized_days_ago:
+            typeof initialData.last_fertilized_days_ago === "number" ? String(initialData.last_fertilized_days_ago) : "0",
           sunlight_level: initialData.sunlight_level || "",
           humidity_preference: initialData.humidity_preference || "",
           temperature_range: initialData.temperature_range || "",
@@ -88,6 +111,8 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
           location: "",
           watering_frequency_days: "",
           fertilizing_frequency_days: "",
+          last_watered_days_ago: "0",
+          last_fertilized_days_ago: "0",
           sunlight_level: "",
           humidity_preference: "",
           temperature_range: "",
@@ -103,6 +128,8 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
     try {
       const watering = Number.parseInt(formData.watering_frequency_days, 10)
       const fertilizing = Number.parseInt(formData.fertilizing_frequency_days, 10)
+      const lastWateredDaysAgo = Number.parseInt(formData.last_watered_days_ago, 10)
+      const lastFertilizedDaysAgo = Number.parseInt(formData.last_fertilized_days_ago, 10)
 
       if (!formData.name.trim()) {
         alert("Please enter a plant name")
@@ -124,6 +151,14 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
         alert("Please enter a valid fertilizing frequency (days)")
         return
       }
+      if (!Number.isFinite(lastWateredDaysAgo) || lastWateredDaysAgo < 0) {
+        alert("Please select a valid last watered value")
+        return
+      }
+      if (!Number.isFinite(lastFertilizedDaysAgo) || lastFertilizedDaysAgo < 0) {
+        alert("Please select a valid last fed value")
+        return
+      }
 
       const payload: ManualPlantData = {
         name: formData.name,
@@ -131,6 +166,8 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
         location: formData.location,
         watering_frequency_days: watering,
         fertilizing_frequency_days: fertilizing,
+        last_watered_days_ago: lastWateredDaysAgo,
+        last_fertilized_days_ago: lastFertilizedDaysAgo,
         sunlight_level: formData.sunlight_level as ManualPlantData["sunlight_level"],
         humidity_preference: formData.humidity_preference,
         temperature_range: formData.temperature_range,
@@ -145,6 +182,8 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
         location: "",
         watering_frequency_days: "",
         fertilizing_frequency_days: "",
+        last_watered_days_ago: "0",
+        last_fertilized_days_ago: "0",
         sunlight_level: "",
         humidity_preference: "",
         temperature_range: "",
@@ -494,6 +533,46 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
                     onChange={(e) => setFormData({ ...formData, fertilizing_frequency_days: e.target.value })}
                     required
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Last watered</Label>
+                  <Select
+                    value={formData.last_watered_days_ago}
+                    onValueChange={(value) => setFormData({ ...formData, last_watered_days_ago: value })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LAST_CARE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.daysAgo} value={String(opt.daysAgo)}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Last fed</Label>
+                  <Select
+                    value={formData.last_fertilized_days_ago}
+                    onValueChange={(value) => setFormData({ ...formData, last_fertilized_days_ago: value })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LAST_CARE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.daysAgo} value={String(opt.daysAgo)}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 

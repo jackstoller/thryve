@@ -81,6 +81,15 @@ export default function Home() {
   const [sortKey, setSortKey] = useState<PlantGallerySortKey>("watering_next")
 
   const { data: plants = [], isLoading: plantsLoading } = useSWR<Plant[]>(isAuthenticated ? "/api/plants" : null, fetcher)
+
+  // Keep the selected plant fresh when SWR updates (e.g., after water/fertilize)
+  useEffect(() => {
+    if (!selectedPlant) return
+    const updated = plants.find((p) => p.id === selectedPlant.id)
+    if (updated && updated !== selectedPlant) {
+      setSelectedPlant(updated)
+    }
+  }, [plants, selectedPlant])
   const { data: sessions = [], isLoading: sessionsLoading } = useSWR<ImportSession[]>(isAuthenticated ? "/api/import-sessions" : null, fetcher, {
     refreshInterval: 2000, // Poll every 2 seconds for active sessions
     onSuccess: (data) => {
@@ -256,10 +265,16 @@ export default function Home() {
 
   const handleManualAdd = async (plantData: ManualPlantData) => {
     try {
-      const now = new Date().toISOString()
-      const nextWaterDate = new Date()
+      const now = new Date()
+
+      const lastWatered = new Date(now)
+      lastWatered.setDate(lastWatered.getDate() - (plantData.last_watered_days_ago ?? 0))
+      const nextWaterDate = new Date(lastWatered)
       nextWaterDate.setDate(nextWaterDate.getDate() + plantData.watering_frequency_days)
-      const nextFertilizeDate = new Date()
+
+      const lastFertilized = new Date(now)
+      lastFertilized.setDate(lastFertilized.getDate() - (plantData.last_fertilized_days_ago ?? 0))
+      const nextFertilizeDate = new Date(lastFertilized)
       nextFertilizeDate.setDate(nextFertilizeDate.getDate() + plantData.fertilizing_frequency_days)
 
       const response = await fetch("/api/plants", {
@@ -274,10 +289,10 @@ export default function Home() {
           sunlight_level: plantData.sunlight_level,
           watering_frequency_days: plantData.watering_frequency_days,
           fertilizing_frequency_days: plantData.fertilizing_frequency_days,
-          last_watered: now,
-          last_fertilized: now,
-          next_water_date: nextWaterDate.toISOString(),
-          next_fertilize_date: nextFertilizeDate.toISOString(),
+            last_watered: lastWatered.toISOString(),
+            last_fertilized: lastFertilized.toISOString(),
+            next_water_date: nextWaterDate.toISOString(),
+            next_fertilize_date: nextFertilizeDate.toISOString(),
           humidity_preference: plantData.humidity_preference,
           temperature_range: plantData.temperature_range,
           care_notes: plantData.care_notes,

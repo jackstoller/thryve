@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Droplets, Leaf, Calendar, CheckCircle2, AlertCircle, Loader2 } from "lucide-react"
+import { Droplets, Leaf, Calendar, CheckCircle2, AlertCircle, Loader2, MapPin } from "lucide-react"
 import type { Plant } from "@/lib/types"
 import { format, isToday, isTomorrow, isPast, addDays, startOfDay } from "date-fns"
 
@@ -146,6 +146,8 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
       {Object.entries(groupedSchedule).map(([dateStr, items]) => {
         const isOverdue = isPast(new Date(dateStr)) && !isToday(new Date(dateStr))
         const isTodayDate = isToday(new Date(dateStr))
+        const waterCount = items.filter((i) => i.type === "water").length
+        const fertilizeCount = items.filter((i) => i.type === "fertilize").length
         
         return (
           <div key={dateStr} className="relative">
@@ -154,7 +156,7 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
               ${isOverdue ? 'border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/10' : ''}
               ${isTodayDate ? 'border-primary/50 bg-primary/5' : ''}
             `}>
-              <CardHeader className="pb-3 pt-4 px-4">
+              <CardHeader className="pb-2 pt-4 px-4">
                 <div className="flex items-start gap-3">
                   {/* Date Badge */}
                   <div className={`
@@ -179,23 +181,23 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
 
                   {/* Header Info */}
                   <div className="flex-1 min-w-0 pt-0.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge 
-                        variant={getDateBadgeVariant(dateStr)} 
-                        className="text-xs px-2 py-0.5 font-semibold"
-                      >
-                        {getDateLabel(dateStr)}
-                      </Badge>
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <div className="w-1 h-1 rounded-full bg-muted-foreground/40" />
-                        <span className="font-medium">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-sm leading-tight truncate">
+                          {getDateLabel(dateStr)}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
                           {items.length} {items.length === 1 ? "task" : "tasks"}
-                        </span>
+                        </div>
                       </div>
+
+                      <Badge
+                        variant={getDateBadgeVariant(dateStr)}
+                        className="text-[11px] px-2 py-0.5 font-medium whitespace-nowrap"
+                      >
+                        {waterCount} water • {fertilizeCount} feed
+                      </Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1.5">
-                      {format(new Date(dateStr), "EEEE, MMM d, yyyy")}
-                    </p>
                   </div>
                 </div>
               </CardHeader>
@@ -261,11 +263,22 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
                                 : "border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300"
                             }`}
                           >
-                            {item.type === "water" ? "💧 Water" : "🌱 Fertilize"}
+                            {item.type === "water" ? (
+                              <>
+                                <Droplets className="w-3 h-3" />
+                                Water
+                              </>
+                            ) : (
+                              <>
+                                <Leaf className="w-3 h-3" />
+                                Feed
+                              </>
+                            )}
                           </Badge>
                           {item.plant.location && (
-                            <span className="text-[10px] text-muted-foreground truncate">
-                              📍 {item.plant.location}
+                            <span className="text-[10px] text-muted-foreground truncate inline-flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />
+                              {item.plant.location}
                             </span>
                           )}
                         </div>
@@ -274,16 +287,10 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
 
                     {/* Action Button */}
                     <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                      <Button
-                        size="sm"
+                      <button
+                        type="button"
                         disabled={loadingAction !== null}
-                        className={`
-                          shadow-sm transition-all duration-200 active:scale-95 h-8 text-xs px-2
-                          ${item.type === "water"
-                            ? "bg-gradient-to-r from-blue-500 to-blue-600 active:from-blue-600 active:to-blue-700 text-white"
-                            : "bg-gradient-to-r from-amber-500 to-amber-600 active:from-amber-600 active:to-amber-700 text-white"
-                          }
-                        `}
+                        className="p-2 -m-2"
                         onClick={async (e) => {
                           e.stopPropagation()
                           setLoadingAction({ plantId: item.plant.id, type: item.type })
@@ -297,15 +304,29 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
                             setLoadingAction(null)
                           }
                         }}
+                        aria-label={item.type === "water" ? "Mark watered" : "Mark fed"}
                       >
-                        {loadingAction?.plantId === item.plant.id && loadingAction?.type === item.type ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : item.type === "water" ? (
-                          <Droplets className="w-3 h-3" />
-                        ) : (
-                          <Leaf className="w-3 h-3" />
-                        )}
-                      </Button>
+                        <span
+                          className={`
+                            inline-flex items-center justify-center gap-1.5
+                            shadow-sm transition-all duration-200 active:scale-95
+                            h-9 px-3 rounded-md text-xs font-medium text-white
+                            ${item.type === "water"
+                              ? "bg-gradient-to-r from-blue-500 to-blue-600 active:from-blue-600 active:to-blue-700"
+                              : "bg-gradient-to-r from-amber-500 to-amber-600 active:from-amber-600 active:to-amber-700"
+                            }
+                          `}
+                        >
+                          {loadingAction?.plantId === item.plant.id && loadingAction?.type === item.type ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : item.type === "water" ? (
+                            <Droplets className="w-3.5 h-3.5" />
+                          ) : (
+                            <Leaf className="w-3.5 h-3.5" />
+                          )}
+                          {item.type === "water" ? "Water" : "Feed"}
+                        </span>
+                      </button>
                     </div>
                   </div>
                 ))}

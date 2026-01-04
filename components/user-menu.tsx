@@ -129,7 +129,7 @@ export function UserMenu() {
                 {profileInitial}
               </div>
               <div className="min-w-0">
-                <div className="text-xl font-title tracking-tight truncate">{displayName}</div>
+                <div className="text-xl font-title tracking-tight truncate text-left">{displayName}</div>
                 <div className="text-xs text-muted-foreground truncate">{userEmail}</div>
               </div>
             </div>

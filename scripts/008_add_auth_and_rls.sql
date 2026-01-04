@@ -210,5 +210,30 @@ BEGIN
       )
     ';
   END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'care_history' AND policyname = 'care history updatable by plant owner'
+  ) THEN
+    EXECUTE '
+      CREATE POLICY "care history updatable by plant owner"
+      ON public.care_history
+      FOR UPDATE
+      USING (
+        EXISTS (
+          SELECT 1 FROM public.plants p
+          WHERE p.id = plant_id
+            AND p.user_id = auth.uid()
+        )
+      )
+      WITH CHECK (
+        EXISTS (
+          SELECT 1 FROM public.plants p
+          WHERE p.id = plant_id
+            AND p.user_id = auth.uid()
+        )
+      )
+    ';
+  END IF;
 END
 $$;

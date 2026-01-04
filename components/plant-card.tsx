@@ -137,8 +137,8 @@ export function PlantCard({ plant, onWater, onFertilize, onEdit, onDelete, onCli
 
       </div>
 
-      <CardContent className="p-3">
-        <div className="flex items-start justify-between mb-1.5">
+      <CardContent className="p-2.5">
+        <div className="flex items-start justify-between mb-1">
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-base leading-tight truncate">{plant.name}</h3>
             {plant.species && <p className="text-xs text-muted-foreground italic truncate">{plant.species}</p>}
@@ -147,7 +147,7 @@ export function PlantCard({ plant, onWater, onFertilize, onEdit, onDelete, onCli
         </div>
 
         {plant.location && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1.5">
             <MapPin className="w-3 h-3 flex-shrink-0" />
             <span className="truncate">{plant.location}</span>
           </div>
@@ -155,7 +155,7 @@ export function PlantCard({ plant, onWater, onFertilize, onEdit, onDelete, onCli
 
         {/* Water Progress Bar */}
         <div>
-          <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center justify-between mb-0.5">
             <span className="text-[10px] text-muted-foreground">Next watering</span>
             <span className="text-[10px] font-medium">
               {plant.next_water_date && (
