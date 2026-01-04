@@ -11,6 +11,11 @@ export async function createClient() {
   if (!supabaseAnonKey) throw new Error("Missing Supabase anon key. Set SUPABASE_ANON_KEY (server) or NEXT_PUBLIC_SUPABASE_ANON_KEY (browser).")
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookieOptions: {
+      name: "thryve-auth",
+      // Safer default for local Docker (http://localhost). In production behind HTTPS, you can set this to true by adjusting the logic.
+      secure: false,
+    },
     cookies: {
       getAll() {
         return cookieStore.getAll()

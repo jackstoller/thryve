@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Leaf, Plus, Loader2 } from "lucide-react"
 import type { Plant, ImportSession } from "@/lib/types"
 import { isPast, isToday } from "date-fns"
+import { useRouter } from "next/navigation"
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
@@ -26,7 +27,16 @@ const fetcher = async (url: string) => {
   return data
 }
 
+const jsonFetcher = async (url: string) => {
+  const res = await fetch(url)
+  return res.json()
+}
+
 export default function Home() {
+  const router = useRouter()
+  const { data: me, isLoading: meLoading } = useSWR("/api/me", jsonFetcher)
+  const isAuthenticated = !!me?.user
+
   const [view, setView] = useState<"grid" | "schedule">("grid")
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [manualFormOpen, setManualFormOpen] = useState(false)
@@ -43,8 +53,8 @@ export default function Home() {
   const [selectedLocations, setSelectedLocations] = useState<string[]>([])
   const [selectedSpecies, setSelectedSpecies] = useState<string[]>([])
 
-  const { data: plants = [], isLoading: plantsLoading } = useSWR<Plant[]>("/api/plants", fetcher)
-  const { data: sessions = [], isLoading: sessionsLoading } = useSWR<ImportSession[]>("/api/import-sessions", fetcher, {
+  const { data: plants = [], isLoading: plantsLoading } = useSWR<Plant[]>(isAuthenticated ? "/api/plants" : null, fetcher)
+  const { data: sessions = [], isLoading: sessionsLoading } = useSWR<ImportSession[]>(isAuthenticated ? "/api/import-sessions" : null, fetcher, {
     refreshInterval: 2000, // Poll every 2 seconds for active sessions
     onSuccess: (data) => {
       // Refresh plants list when a session completes
@@ -63,6 +73,60 @@ export default function Home() {
       p.next_fertilize_date && (isPast(new Date(p.next_fertilize_date)) || isToday(new Date(p.next_fertilize_date)))
     return needsWater || needsFertilizer
   }).length
+
+  // Filter plants based on search and filters
+  const filteredPlants = useMemo(() => {
+    return plants.filter((plant) => {
+      // Search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase()
+        const matchesName = plant.name.toLowerCase().includes(query)
+        const matchesSpecies = plant.species?.toLowerCase().includes(query)
+        const matchesLocation = plant.location?.toLowerCase().includes(query)
+        if (!matchesName && !matchesSpecies && !matchesLocation) {
+          return false
+        }
+      }
+
+      // Location filter
+      if (selectedLocations.length > 0 && plant.location) {
+        if (!selectedLocations.includes(plant.location)) {
+          return false
+        }
+      }
+
+      // Species filter
+      if (selectedSpecies.length > 0 && plant.species) {
+        if (!selectedSpecies.includes(plant.species)) {
+          return false
+        }
+      }
+
+      return true
+    })
+  }, [plants, searchQuery, selectedLocations, selectedSpecies])
+
+  useEffect(() => {
+    if (!meLoading && !isAuthenticated) {
+      router.replace("/login")
+    }
+  }, [meLoading, isAuthenticated, router])
+
+  if (meLoading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   const handleImageSelected = async (files: File[], name: string, location: string) => {
     try {
@@ -234,38 +298,6 @@ export default function Home() {
     setPlantDetailOpen(true)
   }
 
-  // Filter plants based on search and filters
-  const filteredPlants = useMemo(() => {
-    return plants.filter((plant) => {
-      // Search filter
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase()
-        const matchesName = plant.name.toLowerCase().includes(query)
-        const matchesSpecies = plant.species?.toLowerCase().includes(query)
-        const matchesLocation = plant.location?.toLowerCase().includes(query)
-        if (!matchesName && !matchesSpecies && !matchesLocation) {
-          return false
-        }
-      }
-
-      // Location filter
-      if (selectedLocations.length > 0 && plant.location) {
-        if (!selectedLocations.includes(plant.location)) {
-          return false
-        }
-      }
-
-      // Species filter
-      if (selectedSpecies.length > 0 && plant.species) {
-        if (!selectedSpecies.includes(plant.species)) {
-          return false
-        }
-      }
-
-      return true
-    })
-  }, [plants, searchQuery, selectedLocations, selectedSpecies])
-
   if (plantsLoading || sessionsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -279,8 +311,6 @@ export default function Home() {
       <Header
         view={view}
         onViewChange={setView}
-        onAddPlant={() => setAddModalOpen(true)}
-        importCount={activeSessions.length}
         urgentCount={urgentCount}
       />
 

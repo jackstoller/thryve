@@ -1,12 +1,19 @@
-import { createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
+import { requireUser } from "@/lib/supabase/require-user"
 
 export async function GET() {
-  const supabase = createAdminClient()
+  const result = await requireUser()
+  if ("response" in result) return result.response
+
+  const { supabase, user } = result
 
   console.log("[v0] Fetching plants from database")
 
-  const { data, error } = await supabase.from("plants").select("*").order("created_at", { ascending: false })
+  const { data, error } = await supabase
+    .from("plants")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
 
   if (error) {
     console.log("[v0] Error fetching plants:", error)
@@ -18,7 +25,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const supabase = createAdminClient()
+  const result = await requireUser()
+  if ("response" in result) return result.response
+
+  const { supabase, user } = result
   const body = await req.json()
 
   console.log("[v0] Creating plant with body:", body)
@@ -32,6 +42,7 @@ export async function POST(req: Request) {
 
   const insertData = {
     ...body,
+    user_id: user.id,
     last_watered: now.toISOString(),
     last_fertilized: now.toISOString(),
     next_water_date: nextWaterDate.toISOString(),

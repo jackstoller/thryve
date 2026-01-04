@@ -1,7 +1,7 @@
--- Tight grants for app tables in public schema.
+-- Grants for app tables in public schema.
 --
--- Goal: keep DB access behind your Next.js API (server-side) by allowing only
--- the `service_role` JWT to read/write app tables.
+-- Goal: allow user-scoped access via Supabase Auth (role `authenticated`) while
+-- relying on Row Level Security (RLS) to ensure users only see their own rows.
 --
 -- Notes:
 -- - docker-entrypoint-initdb.d scripts only run on a fresh DB volume.
@@ -9,8 +9,8 @@
 
 DO $$
 BEGIN
-  -- Ensure roles can see the schema (service_role only for app access)
-  EXECUTE 'GRANT USAGE ON SCHEMA public TO service_role';
+  -- Ensure roles can see the schema
+  EXECUTE 'GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role';
 
   -- Storage API switches into `service_role` for admin operations.
   -- Ensure it can access the Storage schema objects.
@@ -22,10 +22,16 @@ BEGIN
   -- to rows in public buckets.
   EXECUTE 'GRANT USAGE ON SCHEMA storage TO anon, authenticated';
 
-  -- Tighten existing objects
+  -- Reset privileges in public.
+  -- Note: RLS policies control row visibility for anon/authenticated.
   EXECUTE 'REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated';
   EXECUTE 'REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated';
   EXECUTE 'REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM anon, authenticated';
+
+  -- Standard Supabase access model: allow authenticated to use public schema.
+  EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated';
+  EXECUTE 'GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO authenticated';
+  EXECUTE 'GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO authenticated';
 
   EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO service_role';
   EXECUTE 'GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO service_role';
@@ -42,6 +48,10 @@ BEGIN
   EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated';
   EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated';
   EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM anon, authenticated';
+
+  EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated';
+  EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO authenticated';
+  EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO authenticated';
 
   EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO service_role';
   EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO service_role';

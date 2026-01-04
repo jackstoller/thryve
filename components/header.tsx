@@ -1,18 +1,17 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Leaf, Plus, Bell } from "lucide-react"
+import { Leaf, Bell } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { UserMenu } from "@/components/user-menu"
 
 interface HeaderProps {
   view: "grid" | "schedule"
   onViewChange: (view: "grid" | "schedule") => void
-  onAddPlant: () => void
-  importCount: number
   urgentCount: number
 }
 
-export function Header({ view, onViewChange, onAddPlant, importCount, urgentCount }: HeaderProps) {
+export function Header({ view, onViewChange, urgentCount }: HeaderProps) {
   return (
     <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-md border-b safe-top">
       <div className="px-4 py-3">
@@ -31,6 +30,8 @@ export function Header({ view, onViewChange, onAddPlant, importCount, urgentCoun
           </button>
 
           <div className="flex items-center gap-2">
+            <UserMenu />
+
             {urgentCount > 0 && (
               <Button 
                 variant="ghost" 
@@ -44,16 +45,6 @@ export function Header({ view, onViewChange, onAddPlant, importCount, urgentCoun
                 </Badge>
               </Button>
             )}
-
-            <Button onClick={onAddPlant} className="relative h-9 active:scale-95 shadow-sm" size="sm">
-              <Plus className="w-4 h-4 mr-1.5" />
-              <span className="hidden xs:inline">Add</span>
-              {importCount > 0 && (
-                <Badge className="absolute -top-1.5 -right-1.5 h-4 w-4 p-0 flex items-center justify-center bg-[var(--success-green)] text-white text-[10px] border-2 border-background">
-                  {importCount}
-                </Badge>
-              )}
-            </Button>
           </div>
         </div>
       </div>

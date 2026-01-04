@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { requireUser } from "@/lib/supabase/require-user"
 
 export const runtime = "nodejs"
 
@@ -29,6 +30,11 @@ function sanitizeFilename(filename: string): string {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireUser()
+    if ("response" in auth) return auth.response
+
+    const { user } = auth
+
     const formData = await request.formData()
     const file = formData.get("file") as File
 
@@ -73,7 +79,7 @@ export async function POST(request: NextRequest) {
     }
 
     const safeName = sanitizeFilename(file.name)
-    const path = `plants/${Date.now()}-${safeName}`
+    const path = `users/${user.id}/plants/${Date.now()}-${safeName}`
     const bytes = Buffer.from(await file.arrayBuffer())
 
     const upload = await supabase.storage.from(bucket).upload(path, bytes, {

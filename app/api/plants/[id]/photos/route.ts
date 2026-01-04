@@ -1,9 +1,12 @@
-import { createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
+import { requireUser } from "@/lib/supabase/require-user"
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = createAdminClient()
+  const result = await requireUser()
+  if ("response" in result) return result.response
+
+  const { supabase, user } = result
   const body = await req.json()
   const { photoUrl } = body
 
@@ -16,6 +19,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .from("plants")
     .select("photos")
     .eq("id", id)
+    .eq("user_id", user.id)
     .single()
 
   if (fetchError) {
@@ -48,6 +52,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .from("plants")
     .update(updateData)
     .eq("id", id)
+    .eq("user_id", user.id)
     .select()
     .single()
 
@@ -60,7 +65,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = createAdminClient()
+  const result = await requireUser()
+  if ("response" in result) return result.response
+
+  const { supabase, user } = result
   const { searchParams } = new URL(req.url)
   const photoId = searchParams.get("photoId")
 
@@ -73,6 +81,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     .from("plants")
     .select("photos")
     .eq("id", id)
+    .eq("user_id", user.id)
     .single()
 
   if (fetchError) {
@@ -97,6 +106,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     .from("plants")
     .update(updateData)
     .eq("id", id)
+    .eq("user_id", user.id)
     .select()
     .single()
 
@@ -109,7 +119,10 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = createAdminClient()
+  const result = await requireUser()
+  if ("response" in result) return result.response
+
+  const { supabase, user } = result
   const body = await req.json()
   const { photos } = body
 
@@ -135,6 +148,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     .from("plants")
     .update(updateData)
     .eq("id", id)
+    .eq("user_id", user.id)
     .select()
     .single()
 

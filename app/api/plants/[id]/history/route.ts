@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { requireUser } from "@/lib/supabase/require-user"
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const supabase = createAdminClient()
+    const result = await requireUser()
+    if ("response" in result) return result.response
+
+    const { supabase, user } = result
+
+    // Ensure the plant belongs to the current user
+    const { error: plantError } = await supabase.from("plants").select("id").eq("id", id).eq("user_id", user.id).single()
+    if (plantError) {
+      return NextResponse.json({ error: "Plant not found" }, { status: 404 })
+    }
 
     const { data: history, error } = await supabase
       .from("care_history")

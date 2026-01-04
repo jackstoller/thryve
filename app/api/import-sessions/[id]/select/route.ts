@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { requireUser } from "@/lib/supabase/require-user"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -10,13 +10,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Species and scientific name are required" }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
+    const result = await requireUser()
+    if ("response" in result) return result.response
+
+    const { supabase, user } = result
 
     // Get the session
     const { data: session } = await supabase
       .from("import_sessions")
       .select("*")
       .eq("id", id)
+      .eq("user_id", user.id)
       .single()
 
     if (!session) {
@@ -39,11 +43,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
+      .eq("user_id", user.id)
 
     // Continue the identification process
     const continueRes = await fetch(`${request.nextUrl.origin}/api/identify-plant/continue`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        cookie: request.headers.get("cookie") ?? "",
+      },
       body: JSON.stringify({ 
         sessionId: id,
         species,

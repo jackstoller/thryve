@@ -3,6 +3,7 @@ import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
 import * as cheerio from "cheerio"
 import { getModelEntries } from "@/lib/ai-provider"
+import { requireUser } from "@/lib/supabase/require-user"
 
 export const runtime = "nodejs"
 
@@ -806,14 +807,19 @@ function consolidateCareRequirements(sources: z.infer<typeof careResearchSchema>
 }
 
 // Background processing function
-async function processPlantIdentification(sessionId: string, imageUrl: string, additionalPhotos: string[] = []) {
+async function processPlantIdentification(userId: string, sessionId: string, imageUrl: string, additionalPhotos: string[] = []) {
   const supabase = createAdminClient()
 
   try {
     console.log(`[Processing] Starting identification for session ${sessionId}`)
     
     // Get the session to retrieve user-provided name and location
-    const { data: session } = await supabase.from("import_sessions").select("*").eq("id", sessionId).single()
+    const { data: session } = await supabase
+      .from("import_sessions")
+      .select("*")
+      .eq("id", sessionId)
+      .eq("user_id", userId)
+      .single()
 
     if (!session) {
       console.error(`[Processing] Session ${sessionId} not found`)
@@ -827,6 +833,7 @@ async function processPlantIdentification(sessionId: string, imageUrl: string, a
       .from("import_sessions")
       .update({ status: "identifying", updated_at: new Date().toISOString() })
       .eq("id", sessionId)
+      .eq("user_id", userId)
 
     console.log(`[Processing] Starting plant identification for session ${sessionId}`)
     const identification = await identifyPlant(imageUrl)
@@ -847,6 +854,7 @@ async function processPlantIdentification(sessionId: string, imageUrl: string, a
           updated_at: new Date().toISOString(),
         })
         .eq("id", sessionId)
+        .eq("user_id", userId)
       
       if (updateError) {
         console.error(`[Processing] Failed to update session ${sessionId} to needs_selection:`, updateError)
@@ -874,6 +882,7 @@ async function processPlantIdentification(sessionId: string, imageUrl: string, a
         updated_at: new Date().toISOString(),
       })
       .eq("id", sessionId)
+      .eq("user_id", userId)
 
     // Step 2: Research from multiple sources
     console.log(`[Processing] Session ${sessionId} - starting care research`)
@@ -899,6 +908,7 @@ async function processPlantIdentification(sessionId: string, imageUrl: string, a
         updated_at: new Date().toISOString(),
       })
       .eq("id", sessionId)
+      .eq("user_id", userId)
 
     // Step 3: Consolidate care requirements
     console.log(`[Processing] Session ${sessionId} - consolidating care requirements`)
@@ -909,6 +919,7 @@ async function processPlantIdentification(sessionId: string, imageUrl: string, a
         updated_at: new Date().toISOString(),
       })
       .eq("id", sessionId)
+      .eq("user_id", userId)
     
     const careRequirements = consolidateCareRequirements(researchedSources)
 
@@ -923,6 +934,7 @@ async function processPlantIdentification(sessionId: string, imageUrl: string, a
     // Step 4: Auto-create the plant using user-provided name and location
     console.log(`[Processing] Session ${sessionId} - creating plant with ${photos.length} photo(s)`)
     const plantPayload = {
+      user_id: userId,
       name: session.plant_name || identification.identified_species,
       location: session.plant_location || null,
       species: identification.identified_species,
@@ -967,6 +979,7 @@ async function processPlantIdentification(sessionId: string, imageUrl: string, a
         updated_at: new Date().toISOString(),
       })
       .eq("id", sessionId)
+      .eq("user_id", userId)
   } catch (error) {
     console.error(`[Processing] Plant identification error for session ${sessionId}:`, error)
     const errorMessage = error instanceof Error ? error.message : "Identification failed"
@@ -980,6 +993,7 @@ async function processPlantIdentification(sessionId: string, imageUrl: string, a
         updated_at: new Date().toISOString(),
       })
       .eq("id", sessionId)
+      .eq("user_id", userId)
     
     console.log(`[Processing] Session ${sessionId} marked as failed`)
   }
@@ -996,6 +1010,11 @@ export async function POST(req: Request) {
       return Response.json({ error: "Missing imageUrl or sessionId" }, { status: 400 })
     }
 
+    const auth = await requireUser()
+    if ("response" in auth) return auth.response
+
+    const { user } = auth
+
     const supabase = createAdminClient()
 
     // Verify session exists
@@ -1003,6 +1022,7 @@ export async function POST(req: Request) {
       .from("import_sessions")
       .select("*")
       .eq("id", sessionId)
+      .eq("user_id", user.id)
       .single()
 
     if (sessionError || !session) {
@@ -1013,7 +1033,7 @@ export async function POST(req: Request) {
     console.log(`[API] Session ${sessionId} verified, starting background processing`)
 
     // Start background processing (don't await)
-    processPlantIdentification(sessionId, imageUrl, additionalPhotos || []).catch((error) => {
+    processPlantIdentification(user.id, sessionId, imageUrl, additionalPhotos || []).catch((error) => {
       console.error(`[API] Background processing error for session ${sessionId}:`, error)
     })
 

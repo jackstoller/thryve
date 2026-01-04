@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { requireUser } from "@/lib/supabase/require-user"
 import { generateObject } from "ai"
 import { z } from "zod"
 import * as cheerio from "cheerio"
@@ -456,8 +456,14 @@ function consolidateCareRequirements(sources: z.infer<typeof careResearchSchema>
 }
 
 export async function POST(request: NextRequest) {
+  const body = await request.json().catch(() => ({}))
+  const { sessionId, species, scientific_name } = body as {
+    sessionId?: string
+    species?: string
+    scientific_name?: string
+  }
+
   try {
-    const { sessionId, species, scientific_name } = await request.json()
 
     if (!sessionId || !species || !scientific_name) {
       return NextResponse.json(
@@ -466,13 +472,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = createAdminClient()
+    const result = await requireUser()
+    if ("response" in result) return result.response
+
+    const { supabase, user } = result
 
     // Get the session
     const { data: session } = await supabase
       .from("import_sessions")
       .select("*")
       .eq("id", sessionId)
+      .eq("user_id", user.id)
       .single()
 
     if (!session) {
@@ -503,6 +513,7 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", sessionId)
+      .eq("user_id", user.id)
 
     // Consolidate care requirements
     console.log(`[Continue] Consolidating care requirements for ${species}`)
@@ -518,23 +529,30 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", sessionId)
+      .eq("user_id", user.id)
 
     console.log(`[Continue] Research complete. Session ready for user confirmation.`)
     return NextResponse.json({ success: true, careRequirements })
   } catch (error) {
     console.error("[Continue] Error:", error)
     
-    const { sessionId } = await request.json()
-    if (sessionId) {
-      const supabase = createAdminClient()
-      await supabase
-        .from("import_sessions")
-        .update({
-          status: "failed",
-          error_message: error instanceof Error ? error.message : "Failed to continue identification",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", sessionId)
+    try {
+      if (sessionId) {
+        const result = await requireUser()
+        if ("supabase" in result) {
+          await result.supabase
+            .from("import_sessions")
+            .update({
+              status: "failed",
+              error_message: error instanceof Error ? error.message : "Failed to continue identification",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", sessionId)
+            .eq("user_id", result.user.id)
+        }
+      }
+    } catch {
+      // ignore
     }
 
     return NextResponse.json(

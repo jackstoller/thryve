@@ -58,12 +58,14 @@ services:
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
       GOTRUE_SITE_URL: https://thryve.jackstoller.com
-      GOTRUE_URI_ALLOW_LIST: https://thryve.jackstoller.com
+      GOTRUE_URI_ALLOW_LIST: ${GOTRUE_URI_ALLOW_LIST:-https://thryve.jackstoller.com,http://localhost:3000,http://localhost:3000/auth/callback,http://127.0.0.1:3000,http://127.0.0.1:3000/auth/callback}
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_EXP: 3600
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_DISABLE_SIGNUP: "false"
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      # Required for external providers. For this stack, the provider callback must go through Kong at /auth/v1/callback.
+      GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: ${API_EXTERNAL_URL:-http://localhost:54321}/auth/v1/callback
       GOTRUE_MAILER_AUTOCONFIRM: "false"  # ✅ Changed for production
 
   rest:
@@ -161,6 +163,40 @@ services:
       - "127.0.0.1:54324:8001"
     volumes:
       - ./docker/kong/kong.yml:/etc/kong/kong.yml:ro
+
+  meta:
+    image: supabase/postgres-meta:v0.95.1
+    container_name: thryve-meta
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: postgres
+      PG_META_DB_USER: supabase_admin
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+
+  studio:
+    image: supabase/studio:latest
+    container_name: thryve-studio
+    restart: unless-stopped
+    depends_on:
+      - kong
+      - meta
+    env_file: .env
+    environment:
+      STUDIO_PG_META_URL: http://meta:8080
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+    ports:
+      - "127.0.0.1:54323:3000"  # ✅ Supabase Studio - only localhost
 
   # ----------------------
   # App

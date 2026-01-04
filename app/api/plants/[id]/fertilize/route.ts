@@ -1,15 +1,19 @@
-import { createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
+import { requireUser } from "@/lib/supabase/require-user"
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = createAdminClient()
+  const result = await requireUser()
+  if ("response" in result) return result.response
+
+  const { supabase, user } = result
 
   // First get the plant to know its fertilizing frequency
   const { data: plant, error: fetchError } = await supabase
     .from("plants")
     .select("fertilizing_frequency_days")
     .eq("id", id)
+    .eq("user_id", user.id)
     .single()
 
   if (fetchError) {
@@ -42,6 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       updated_at: now.toISOString(),
     })
     .eq("id", id)
+    .eq("user_id", user.id)
     .select()
     .single()
 

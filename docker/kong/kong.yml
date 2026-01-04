@@ -1,6 +1,36 @@
 _format_version: "3.0"
 _transform: true
 
+plugins:
+  - name: cors
+    config:
+      origins:
+        - http://localhost:3000
+        - http://127.0.0.1:3000
+        - https://thryve.jackstoller.com
+      methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      headers:
+        - Accept
+        - Authorization
+        - Content-Type
+        - Origin
+        - X-Client-Info
+        - X-Requested-With
+        - apikey
+        - x-supabase-api-version
+      exposed_headers:
+        - Content-Range
+        - X-Content-Range
+      credentials: true
+      max_age: 3600
+      preflight_continue: false
+
 services:
   - name: auth-v1
     url: http://auth:9999
