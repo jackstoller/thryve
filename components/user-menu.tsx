@@ -35,6 +35,8 @@ export function UserMenu() {
   const userEmail = data?.user?.email ?? null
   const displayName = data?.profile?.full_name || userEmail || "Account"
 
+  const profileInitial = (displayName || "A").trim().charAt(0).toUpperCase()
+
   useEffect(() => {
     setFullName(data?.profile?.full_name ?? "")
   }, [data?.profile?.full_name])
@@ -117,19 +119,23 @@ export function UserMenu() {
 
       <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
         <DialogContent
-          className="top-0 left-0 translate-x-0 translate-y-0 h-[100dvh] w-screen max-w-none rounded-none"
+          className="sm:max-w-md"
         >
-          <DialogHeader>
-            <DialogTitle>{displayName}</DialogTitle>
+          <DialogHeader className="gap-0">
+            <DialogTitle className="sr-only">Account</DialogTitle>
+            <div className="flex items-center gap-3">
+              <div className="h-11 w-11 rounded-full bg-[linear-gradient(135deg,var(--brand-primary-from),var(--brand-primary-to))] text-white flex items-center justify-center font-semibold">
+                {profileInitial}
+              </div>
+              <div className="min-w-0">
+                <div className="text-xl font-title tracking-tight truncate">{displayName}</div>
+                <div className="text-xs text-muted-foreground truncate">{userEmail}</div>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input value={userEmail ?? ""} disabled />
-            </div>
-
-            <div className="space-y-1.5">
+          <div className="space-y-5">
+            <div className="space-y-2">
               <Label htmlFor="profileFullName">Full name</Label>
               <Input
                 id="profileFullName"
@@ -139,13 +145,24 @@ export function UserMenu() {
               />
             </div>
 
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input value={userEmail ?? ""} disabled />
+            </div>
+
             {signOutError && <p className="text-sm text-destructive break-words">{signOutError}</p>}
 
             <div className="flex gap-2">
               <Button onClick={saveProfile} disabled={saving || signingOut} className="flex-1">
                 Save
               </Button>
-              <Button type="button" variant="outline" onClick={signOut} disabled={saving || signingOut} className="flex-1">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={signOut}
+                disabled={saving || signingOut}
+                className="flex-1"
+              >
                 <LogOut className="w-4 h-4 mr-2" />
                 {signingOut ? "Signing out..." : "Sign out"}
               </Button>

@@ -9,13 +9,14 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        default:
+          "relative overflow-hidden text-primary-foreground bg-[linear-gradient(135deg,var(--brand-primary-from),var(--brand-primary-to))] ring-1 ring-inset ring-border/25 shadow-xs hover:brightness-95 active:translate-y-px active:shadow-none active:brightness-90 before:content-[''] before:absolute before:inset-0 before:rounded-[inherit] before:pointer-events-none before:bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--brand-bg)_26%,transparent),transparent_65%)]",
         destructive:
           'bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
         outline:
           'border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50',
         secondary:
-          'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+          "text-secondary-foreground bg-[linear-gradient(135deg,var(--brand-secondary-from),var(--brand-secondary-to))] hover:brightness-95 active:brightness-90",
         ghost:
           'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         link: 'text-primary underline-offset-4 hover:underline',

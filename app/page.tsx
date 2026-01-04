@@ -13,10 +13,36 @@ import { ScheduleView } from "@/components/schedule-view"
 import { PlantDetailDrawer } from "@/components/plant-detail-drawer"
 import { PlantGalleryFilters } from "@/components/plant-gallery-filters"
 import { Button } from "@/components/ui/button"
+import Image from "next/image"
 import { Leaf, Plus, Loader2 } from "lucide-react"
 import type { Plant, ImportSession } from "@/lib/types"
 import { isPast, isToday } from "date-fns"
 import { useRouter } from "next/navigation"
+
+function BrandedLoadingScreen() {
+  return (
+    <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-6">
+      <div className="flex flex-col items-center text-center gap-4">
+        <div className="h-14 w-14 rounded-2xl flex items-center justify-center overflow-hidden">
+          <Image
+            src="/logo-square-transparent.png"
+            alt="Thryve"
+            width={48}
+            height={48}
+            priority
+          />
+        </div>
+
+        <div className="text-lg font-title tracking-tight">Thryve</div>
+
+        <div
+          className="h-5 w-5 rounded-full border-2 border-muted-foreground/30 border-t-foreground animate-spin"
+          aria-label="Loading"
+        />
+      </div>
+    </div>
+  )
+}
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
@@ -113,11 +139,7 @@ export default function Home() {
   }, [meLoading, isAuthenticated, router])
 
   if (meLoading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    )
+    return <BrandedLoadingScreen />
   }
 
   if (!isAuthenticated) {
@@ -298,19 +320,21 @@ export default function Home() {
     setPlantDetailOpen(true)
   }
 
+  const handleViewChange = (nextView: "grid" | "schedule") => {
+    setView(nextView)
+    setPlantDetailOpen(false)
+    setSelectedPlant(null)
+  }
+
   if (plantsLoading || sessionsLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
-    )
+    return <BrandedLoadingScreen />
   }
 
   return (
     <div className="flex flex-col h-full bg-background overflow-hidden">
       <Header
         view={view}
-        onViewChange={setView}
+        onViewChange={handleViewChange}
         urgentCount={urgentCount}
       />
 
@@ -328,7 +352,7 @@ export default function Home() {
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto overscroll-contain pb-20">
+      <main className="flex-1 overflow-y-auto overscroll-contain pt-4 pb-20">
         {plants.length === 0 ? (
           <div className="text-center py-12 px-4">
             <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
@@ -461,7 +485,7 @@ export default function Home() {
 
       <MobileNav
         view={view}
-        onViewChange={setView}
+        onViewChange={handleViewChange}
         onAddPlant={() => setAddModalOpen(true)}
         urgentCount={urgentCount}
       />

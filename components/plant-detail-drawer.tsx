@@ -270,31 +270,25 @@ export function PlantDetailDrawer({
           {/* Action Buttons */}
           <div className="flex gap-3">
             <Button
-              className={`flex-1 ${
-                needsWater
-                  ? "bg-[var(--water-blue)] hover:bg-[var(--water-blue)]/90"
-                  : "bg-[var(--water-blue)]/20 text-[var(--water-blue)] hover:bg-[var(--water-blue)]/30"
-              }`}
+              variant="outline"
+              className="flex-1 bg-card/60 hover:bg-accent"
               onClick={async () => {
                 await onWater(plant.id)
                 mutate(`/api/plants/${plant.id}/history`)
               }}
             >
-              <Droplets className="w-4 h-4 mr-2" />
+              <Droplets className="w-4 h-4 mr-2 text-[var(--water-blue)]" />
               {needsWater ? "Water Now" : "Mark Watered"}
             </Button>
             <Button
-              className={`flex-1 ${
-                needsFertilizer
-                  ? "bg-[var(--fertilizer-amber)] hover:bg-[var(--fertilizer-amber)]/90"
-                  : "bg-[var(--fertilizer-amber)]/20 text-[var(--fertilizer-amber)] hover:bg-[var(--fertilizer-amber)]/30"
-              }`}
+              variant="outline"
+              className="flex-1 bg-card/60 hover:bg-accent"
               onClick={async () => {
                 await onFertilize(plant.id)
                 mutate(`/api/plants/${plant.id}/history`)
               }}
             >
-              <Leaf className="w-4 h-4 mr-2" />
+              <Leaf className="w-4 h-4 mr-2 text-[var(--fertilizer-amber)]" />
               {needsFertilizer ? "Feed Now" : "Mark Fed"}
             </Button>
           </div>

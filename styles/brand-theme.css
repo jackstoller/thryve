@@ -1,0 +1,118 @@
+/* Brand theme tokens (light/dark) */
+
+:root {
+  /* Base brand colors (provided) */
+  --brand-primary-from: #105B2B;
+  --brand-primary-to: #51996A;
+
+  --brand-secondary-from: #4B7D16;
+  --brand-secondary-to: #A7D873;
+
+  --brand-bg: #F9F7F0;
+  --brand-fg: #262626;
+
+  /* App tokens (shadcn-style) */
+  --background: var(--brand-bg);
+  --foreground: var(--brand-fg);
+
+  --card: #ffffff;
+  --card-foreground: var(--foreground);
+
+  --popover: #ffffff;
+  --popover-foreground: var(--foreground);
+
+  /* Use the darker end of the gradient as the solid "primary" token */
+  --primary: var(--brand-primary-from);
+  --primary-foreground: var(--brand-bg);
+
+  /* Secondary surfaces (subtle green-tinted background) */
+  --secondary: color-mix(in oklab, var(--brand-secondary-to) 18%, var(--brand-bg));
+  --secondary-foreground: var(--foreground);
+
+  --muted: color-mix(in oklab, #ffffff 65%, var(--brand-bg));
+  --muted-foreground: color-mix(in oklab, var(--foreground) 65%, var(--background));
+
+  --accent: color-mix(in oklab, var(--brand-primary-to) 16%, var(--brand-bg));
+  --accent-foreground: var(--foreground);
+
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+
+  --border: color-mix(in oklab, var(--foreground) 12%, var(--background));
+  --input: color-mix(in oklab, var(--foreground) 10%, var(--background));
+  --ring: color-mix(in oklab, var(--brand-primary-from) 70%, #ffffff);
+
+  /* Secondary background / panel color */
+  --surface: color-mix(in oklab, var(--brand-primary-to) 6%, var(--brand-bg));
+
+  /* Charts (keep coherent with new palette) */
+  --chart-1: var(--brand-primary-from);
+  --chart-2: var(--brand-primary-to);
+  --chart-3: var(--brand-secondary-from);
+  --chart-4: var(--brand-secondary-to);
+  --chart-5: color-mix(in oklab, var(--brand-primary-from) 40%, var(--brand-secondary-to));
+
+  --radius: 0.75rem;
+
+  /* Sidebar tokens */
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--secondary);
+  --sidebar-accent-foreground: var(--secondary-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+
+  /* Custom plant-specific tokens (kept, but tuned) */
+  --water-blue: #2f7dd1;
+  --fertilizer-amber: #d29a2f;
+  --sun-yellow: #f1d56a;
+  --success-green: color-mix(in oklab, var(--brand-primary-from) 70%, var(--brand-secondary-to));
+}
+
+.dark {
+  --background: #0e1410;
+  --foreground: #f2f2f2;
+
+  --card: #111a14;
+  --card-foreground: var(--foreground);
+
+  --popover: #111a14;
+  --popover-foreground: var(--foreground);
+
+  --primary: color-mix(in oklab, var(--brand-primary-to) 70%, #0b120d);
+  --primary-foreground: #0b120d;
+
+  --secondary: #1a241d;
+  --secondary-foreground: var(--foreground);
+
+  --muted: #1a241d;
+  --muted-foreground: color-mix(in oklab, var(--foreground) 70%, var(--muted));
+
+  --accent: color-mix(in oklab, var(--brand-primary-to) 22%, #0b120d);
+  --accent-foreground: var(--foreground);
+
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+
+  --border: color-mix(in oklab, var(--foreground) 14%, var(--background));
+  --input: color-mix(in oklab, var(--foreground) 12%, var(--background));
+  --ring: color-mix(in oklab, var(--brand-primary-to) 70%, #ffffff);
+
+  --surface: #0f1812;
+
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--secondary);
+  --sidebar-accent-foreground: var(--secondary-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+
+  --water-blue: #4d8fe0;
+  --fertilizer-amber: #d9a94e;
+  --sun-yellow: #f3db7b;
+  --success-green: color-mix(in oklab, var(--brand-primary-to) 55%, var(--brand-secondary-from));
+}

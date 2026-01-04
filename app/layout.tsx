@@ -1,10 +1,11 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter, Geist_Mono } from "next/font/google"
+import { Inter, Geist_Mono, Young_Serif } from "next/font/google"
 import "./globals.css"
 
 const _inter = Inter({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
+const _youngSerif = Young_Serif({ subsets: ["latin"], weight: "400", variable: "--font-title" })
 
 export const metadata: Metadata = {
   title: "Thryve - Smart Plant Care",
@@ -19,8 +20,8 @@ export const metadata: Metadata = {
     viewportFit: "cover",
   },
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#4ade80" },
-    { media: "(prefers-color-scheme: dark)", color: "#22c55e" },
+    { media: "(prefers-color-scheme: light)", color: "#105B2B" },
+    { media: "(prefers-color-scheme: dark)", color: "#51996A" },
   ],
   appleWebApp: {
     capable: true,
@@ -28,21 +29,8 @@ export const metadata: Metadata = {
     title: "Thryve",
   },
   icons: {
-    icon: [
-      {
-        url: "/icon-light-32x32.png",
-        media: "(prefers-color-scheme: light)",
-      },
-      {
-        url: "/icon-dark-32x32.png",
-        media: "(prefers-color-scheme: dark)",
-      },
-      {
-        url: "/icon.svg",
-        type: "image/svg+xml",
-      },
-    ],
-    apple: "/apple-icon.png",
+    icon: [{ url: "/logo-favicon-120.png", type: "image/png" }],
+    apple: "/logo-favicon-120.png",
   },
 }
 
@@ -58,7 +46,9 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
-      <body className={`font-sans antialiased ${_inter.className} touch-manipulation overscroll-none`}>
+      <body
+        className={`font-sans antialiased ${_inter.className} ${_youngSerif.variable} touch-manipulation overscroll-none`}
+      >
         <div className="fixed inset-0 overflow-hidden">
           {children}
         </div>

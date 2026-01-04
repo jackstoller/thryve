@@ -1,7 +1,8 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Leaf, Bell } from "lucide-react"
+import Image from "next/image"
+import { Bell } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { UserMenu } from "@/components/user-menu"
 
@@ -13,19 +14,24 @@ interface HeaderProps {
 
 export function Header({ view, onViewChange, urgentCount }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-md border-b safe-top">
+    <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-md border-b safe-top mb-3">
       <div className="px-4 py-3">
         <div className="flex items-center justify-between">
           <button 
             onClick={() => onViewChange("grid")}
             className="flex items-center gap-2.5 hover:opacity-80 transition-opacity active:scale-95"
           >
-            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-sm">
-              <Leaf className="w-5 h-5 text-primary-foreground" />
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden">
+              <Image
+                src="/logo-square-transparent.png"
+                alt="Thryve"
+                width={28}
+                height={28}
+                priority
+              />
             </div>
             <div className="text-start">
-              <h1 className="text-lg font-bold tracking-tight">Thryve</h1>
-              <p className="text-[10px] text-muted-foreground leading-none">Smart Plant Care</p>
+              <h1 className="text-lg font-bold tracking-tight font-title">Thryve</h1>
             </div>
           </button>
 
