@@ -11,7 +11,7 @@ import { ManualPlantForm, type ManualPlantData } from "@/components/manual-plant
 import { ImportSidebar } from "@/components/import-sidebar"
 import { ScheduleView } from "@/components/schedule-view"
 import { PlantDetailDrawer } from "@/components/plant-detail-drawer"
-import { PlantGalleryFilters } from "@/components/plant-gallery-filters"
+import { PlantGalleryFilters, type PlantGallerySortKey } from "@/components/plant-gallery-filters"
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
 import { Leaf, Plus, Loader2 } from "lucide-react"
@@ -78,6 +78,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedLocations, setSelectedLocations] = useState<string[]>([])
   const [selectedSpecies, setSelectedSpecies] = useState<string[]>([])
+  const [sortKey, setSortKey] = useState<PlantGallerySortKey>("watering_next")
 
   const { data: plants = [], isLoading: plantsLoading } = useSWR<Plant[]>(isAuthenticated ? "/api/plants" : null, fetcher)
   const { data: sessions = [], isLoading: sessionsLoading } = useSWR<ImportSession[]>(isAuthenticated ? "/api/import-sessions" : null, fetcher, {
@@ -100,9 +101,9 @@ export default function Home() {
     return needsWater || needsFertilizer
   }).length
 
-  // Filter plants based on search and filters
+  // Filter + sort plants for gallery
   const filteredPlants = useMemo(() => {
-    return plants.filter((plant) => {
+    const matches = plants.filter((plant) => {
       // Search filter
       if (searchQuery) {
         const query = searchQuery.toLowerCase()
@@ -130,7 +131,38 @@ export default function Home() {
 
       return true
     })
-  }, [plants, searchQuery, selectedLocations, selectedSpecies])
+
+    const toDateMsOrInfinity = (value: string | null) => {
+      if (!value) return Number.POSITIVE_INFINITY
+      const ms = new Date(value).getTime()
+      return Number.isFinite(ms) ? ms : Number.POSITIVE_INFINITY
+    }
+
+    const compareText = (a: string | null, b: string | null) => {
+      const av = (a ?? "").trim().toLowerCase()
+      const bv = (b ?? "").trim().toLowerCase()
+      if (!av && !bv) return 0
+      if (!av) return 1
+      if (!bv) return -1
+      return av.localeCompare(bv)
+    }
+
+    return [...matches].sort((a, b) => {
+      switch (sortKey) {
+        case "watering_next":
+          return toDateMsOrInfinity(a.next_water_date) - toDateMsOrInfinity(b.next_water_date)
+        case "feeding_next":
+          return toDateMsOrInfinity(a.next_fertilize_date) - toDateMsOrInfinity(b.next_fertilize_date)
+        case "location":
+          return compareText(a.location, b.location) || compareText(a.name, b.name)
+        case "species":
+          return compareText(a.species, b.species) || compareText(a.name, b.name)
+        case "name":
+        default:
+          return compareText(a.name, b.name)
+      }
+    })
+  }, [plants, searchQuery, selectedLocations, selectedSpecies, sortKey])
 
   useEffect(() => {
     if (!meLoading && !isAuthenticated) {
@@ -324,6 +356,7 @@ export default function Home() {
     setView(nextView)
     setPlantDetailOpen(false)
     setSelectedPlant(null)
+    setImportSidebarOpen(false)
   }
 
   if (plantsLoading || sessionsLoading) {
@@ -378,6 +411,8 @@ export default function Home() {
               onLocationsChange={setSelectedLocations}
               selectedSpecies={selectedSpecies}
               onSpeciesChange={setSelectedSpecies}
+              sortKey={sortKey}
+              onSortChange={setSortKey}
             />
             <div className="grid grid-cols-1 xs:grid-cols-2 gap-4 pb-4">
               {filteredPlants.map((plant) => (
@@ -466,6 +501,10 @@ export default function Home() {
         sessions={sessions}
         open={importSidebarOpen}
         onClose={() => setImportSidebarOpen(false)}
+        onReturnToGallery={() => {
+          setView("grid")
+          setImportSidebarOpen(false)
+        }}
         onConfirm={() => {}} 
         onCancel={handleCancelImport}
         onCorrect={handleCorrectImport}

@@ -33,6 +33,12 @@ export interface ManualPlantData {
   care_notes: string
 }
 
+type ManualPlantFormState = Omit<ManualPlantData, "watering_frequency_days" | "fertilizing_frequency_days" | "sunlight_level"> & {
+  watering_frequency_days: string
+  fertilizing_frequency_days: string
+  sunlight_level: ManualPlantData["sunlight_level"] | ""
+}
+
 export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, sessionToComplete, researchSources }: ManualPlantFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isResearching, setIsResearching] = useState(false)
@@ -43,15 +49,17 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
     stage: "idle",
     sources: [],
   })
-  const [formData, setFormData] = useState<ManualPlantData>({
+  const [formData, setFormData] = useState<ManualPlantFormState>({
     name: initialData?.name || "",
     species: initialData?.species || "",
     location: initialData?.location || "",
-    watering_frequency_days: initialData?.watering_frequency_days || 7,
-    fertilizing_frequency_days: initialData?.fertilizing_frequency_days || 30,
-    sunlight_level: initialData?.sunlight_level || "medium",
-    humidity_preference: initialData?.humidity_preference || "moderate",
-    temperature_range: initialData?.temperature_range || "60-75°F",
+    watering_frequency_days:
+      typeof initialData?.watering_frequency_days === "number" ? String(initialData.watering_frequency_days) : "",
+    fertilizing_frequency_days:
+      typeof initialData?.fertilizing_frequency_days === "number" ? String(initialData.fertilizing_frequency_days) : "",
+    sunlight_level: initialData?.sunlight_level || "",
+    humidity_preference: initialData?.humidity_preference || "",
+    temperature_range: initialData?.temperature_range || "",
     care_notes: initialData?.care_notes || "",
   })
 
@@ -63,24 +71,26 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
           name: initialData.name || "",
           species: initialData.species || "",
           location: initialData.location || "",
-          watering_frequency_days: initialData.watering_frequency_days || 7,
-          fertilizing_frequency_days: initialData.fertilizing_frequency_days || 30,
-          sunlight_level: initialData.sunlight_level || "medium",
-          humidity_preference: initialData.humidity_preference || "moderate",
-          temperature_range: initialData.temperature_range || "60-75°F",
+          watering_frequency_days:
+            typeof initialData.watering_frequency_days === "number" ? String(initialData.watering_frequency_days) : "",
+          fertilizing_frequency_days:
+            typeof initialData.fertilizing_frequency_days === "number" ? String(initialData.fertilizing_frequency_days) : "",
+          sunlight_level: initialData.sunlight_level || "",
+          humidity_preference: initialData.humidity_preference || "",
+          temperature_range: initialData.temperature_range || "",
           care_notes: initialData.care_notes || "",
         })
       } else {
-        // Reset form when opening without initialData
+        // Reset form when opening without initialData (manual add should not prefill care fields)
         setFormData({
           name: "",
           species: "",
           location: "",
-          watering_frequency_days: 7,
-          fertilizing_frequency_days: 30,
-          sunlight_level: "medium",
-          humidity_preference: "moderate",
-          temperature_range: "60-75°F",
+          watering_frequency_days: "",
+          fertilizing_frequency_days: "",
+          sunlight_level: "",
+          humidity_preference: "",
+          temperature_range: "",
           care_notes: "",
         })
       }
@@ -91,17 +101,53 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
     e.preventDefault()
     setIsSubmitting(true)
     try {
-      await onSubmit(formData)
+      const watering = Number.parseInt(formData.watering_frequency_days, 10)
+      const fertilizing = Number.parseInt(formData.fertilizing_frequency_days, 10)
+
+      if (!formData.name.trim()) {
+        alert("Please enter a plant name")
+        return
+      }
+      if (!formData.location.trim()) {
+        alert("Please enter a location")
+        return
+      }
+      if (!formData.sunlight_level) {
+        alert("Please select a sunlight level")
+        return
+      }
+      if (!Number.isFinite(watering) || watering < 1) {
+        alert("Please enter a valid watering frequency (days)")
+        return
+      }
+      if (!Number.isFinite(fertilizing) || fertilizing < 1) {
+        alert("Please enter a valid fertilizing frequency (days)")
+        return
+      }
+
+      const payload: ManualPlantData = {
+        name: formData.name,
+        species: formData.species,
+        location: formData.location,
+        watering_frequency_days: watering,
+        fertilizing_frequency_days: fertilizing,
+        sunlight_level: formData.sunlight_level as ManualPlantData["sunlight_level"],
+        humidity_preference: formData.humidity_preference,
+        temperature_range: formData.temperature_range,
+        care_notes: formData.care_notes,
+      }
+
+      await onSubmit(payload)
       // Reset form
       setFormData({
         name: "",
         species: "",
         location: "",
-        watering_frequency_days: 7,
-        fertilizing_frequency_days: 30,
-        sunlight_level: "medium",
-        humidity_preference: "moderate",
-        temperature_range: "60-75°F",
+        watering_frequency_days: "",
+        fertilizing_frequency_days: "",
+        sunlight_level: "",
+        humidity_preference: "",
+        temperature_range: "",
         care_notes: "",
       })
       onOpenChange(false)
@@ -178,9 +224,11 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
       // Update form with researched values
       setFormData({
         ...formData,
-        watering_frequency_days: data.watering_frequency_days,
-        fertilizing_frequency_days: data.fertilizing_frequency_days,
-        sunlight_level: data.sunlight_level,
+        watering_frequency_days:
+          typeof data.watering_frequency_days === "number" ? String(data.watering_frequency_days) : "",
+        fertilizing_frequency_days:
+          typeof data.fertilizing_frequency_days === "number" ? String(data.fertilizing_frequency_days) : "",
+        sunlight_level: data.sunlight_level || "",
         humidity_preference: data.humidity_preference,
         temperature_range: data.temperature_range,
         care_notes: data.care_notes,
@@ -204,64 +252,78 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
     setFormData({ ...formData, name: randomName })
   }
 
+  const handleDialogInteractOutside = (e: Event) => {
+    const target = e.target as HTMLElement | null
+    if (!target) return
+    if (target.closest('[data-slot="select-content"]')) {
+      e.preventDefault()
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="sm:max-w-lg max-h-[90vh] overflow-y-auto"
+        onInteractOutside={handleDialogInteractOutside}
+      >
         <DialogHeader>
           <DialogTitle>Add Plant Manually</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Plant Name *</Label>
-            <div className="flex gap-2">
-              <Input
-                id="name"
-                placeholder="e.g., My Snake Plant"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="flex-1"
-                required
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleAutoName}
-                disabled={isSubmitting}
-                className="shrink-0"
-                title="Generate a random plant name"
-              >
-                <Shuffle className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-3">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Plant Details</div>
 
-          <div className="space-y-2">
-            <Label htmlFor="species">Species (Optional)</Label>
-            <div className="flex gap-2">
-              <Input
-                id="species"
-                placeholder="e.g., Sansevieria trifasciata"
-                value={formData.species}
-                onChange={(e) => setFormData({ ...formData, species: e.target.value })}
-                className="flex-1"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleResearch}
-                disabled={isResearching || !formData.species.trim()}
-                className="shrink-0"
-                title="Research care requirements for this species"
-              >
-                {isResearching ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Sparkles className="w-4 h-4" />
-                )}
-              </Button>
+            <div className="space-y-2">
+              <Label htmlFor="name">Plant Name *</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="name"
+                  placeholder="e.g., My Snake Plant"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="flex-1"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleAutoName}
+                  disabled={isSubmitting}
+                  className="shrink-0"
+                  title="Generate a random plant name"
+                >
+                  <Shuffle className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
-          </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="species">Species (Optional)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="species"
+                  placeholder="e.g., Sansevieria trifasciata"
+                  value={formData.species}
+                  onChange={(e) => setFormData({ ...formData, species: e.target.value })}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleResearch}
+                  disabled={isResearching || !formData.species.trim()}
+                  className="shrink-0"
+                  title="Research care requirements for this species"
+                >
+                  {isResearching ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
 
           {/* Display research sources if provided from AI import */}
           {researchSources && researchSources.length > 0 && (
@@ -301,15 +363,36 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="location">Location *</Label>
-            <Input
-              id="location"
-              placeholder="e.g., Living Room, Bedroom Window"
-              value={formData.location}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              required
-            />
+            <div className="space-y-2">
+              <Label htmlFor="location">Location *</Label>
+              <Input
+                id="location"
+                placeholder="e.g., Living Room, Bedroom Window"
+                value={formData.location}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="sunlight">Sunlight Level *</Label>
+              <Select
+                value={formData.sunlight_level}
+                onValueChange={(value: "low" | "medium" | "bright" | "direct") =>
+                  setFormData({ ...formData, sunlight_level: value })
+                }
+              >
+                <SelectTrigger id="sunlight" className="w-full">
+                  <SelectValue placeholder="Select level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low - Minimal indirect light</SelectItem>
+                  <SelectItem value="medium">Medium - Moderate indirect light</SelectItem>
+                  <SelectItem value="bright">Bright - Bright indirect light</SelectItem>
+                  <SelectItem value="direct">Direct - Direct sunlight</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Show research progress panel when researching */}
@@ -385,8 +468,9 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
               </div>
             </div>
           ) : (
-            <>
-              {/* Regular form fields - only show when not researching */}
+            <div className="space-y-3">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Care</div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="watering">Watering (days) *</Label>
@@ -395,9 +479,7 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
                     type="number"
                     min="1"
                     value={formData.watering_frequency_days}
-                    onChange={(e) =>
-                      setFormData({ ...formData, watering_frequency_days: parseInt(e.target.value) || 7 })
-                    }
+                    onChange={(e) => setFormData({ ...formData, watering_frequency_days: e.target.value })}
                     required
                   />
                 </div>
@@ -409,32 +491,10 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
                     type="number"
                     min="1"
                     value={formData.fertilizing_frequency_days}
-                    onChange={(e) =>
-                      setFormData({ ...formData, fertilizing_frequency_days: parseInt(e.target.value) || 30 })
-                    }
+                    onChange={(e) => setFormData({ ...formData, fertilizing_frequency_days: e.target.value })}
                     required
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="sunlight">Sunlight Level *</Label>
-                <Select
-                  value={formData.sunlight_level}
-                  onValueChange={(value: "low" | "medium" | "bright" | "direct") =>
-                    setFormData({ ...formData, sunlight_level: value })
-                  }
-                >
-                  <SelectTrigger id="sunlight">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low - Minimal indirect light</SelectItem>
-                    <SelectItem value="medium">Medium - Moderate indirect light</SelectItem>
-                    <SelectItem value="bright">Bright - Bright indirect light</SelectItem>
-                    <SelectItem value="direct">Direct - Direct sunlight</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
 
               <div className="space-y-2">
@@ -467,7 +527,7 @@ export function ManualPlantForm({ open, onOpenChange, onSubmit, initialData, ses
                   rows={3}
                 />
               </div>
-            </>
+            </div>
           )}
 
           <div className="flex gap-3 pt-4">

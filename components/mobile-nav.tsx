@@ -13,7 +13,7 @@ interface MobileNavProps {
 
 export function MobileNav({ view, onViewChange, onAddPlant, urgentCount }: MobileNavProps) {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t safe-bottom">
+    <nav className="fixed bottom-0 left-0 right-0 z-[80] bg-background/95 backdrop-blur-md border-t safe-bottom">
       <div className="flex items-center justify-around px-2 py-2">
         <Button
           variant={view === "grid" ? "default" : "ghost"}

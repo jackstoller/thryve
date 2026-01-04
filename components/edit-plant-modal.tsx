@@ -30,9 +30,9 @@ export function EditPlantModal({ plant, open, onOpenChange, onSave }: EditPlantM
     name: "",
     species: "",
     location: "",
-    sunlight_level: "" as Plant["sunlight_level"],
-    watering_frequency_days: 7,
-    fertilizing_frequency_days: 30,
+    sunlight_level: "" as Plant["sunlight_level"] | "",
+    watering_frequency_days: "",
+    fertilizing_frequency_days: "",
     care_notes: "",
   })
 
@@ -53,8 +53,14 @@ export function EditPlantModal({ plant, open, onOpenChange, onSave }: EditPlantM
         species: currentPlant.species || "",
         location: currentPlant.location || "",
         sunlight_level: currentPlant.sunlight_level,
-        watering_frequency_days: currentPlant.watering_frequency_days,
-        fertilizing_frequency_days: currentPlant.fertilizing_frequency_days,
+        watering_frequency_days:
+          typeof currentPlant.watering_frequency_days === "number"
+            ? String(currentPlant.watering_frequency_days)
+            : "",
+        fertilizing_frequency_days:
+          typeof currentPlant.fertilizing_frequency_days === "number"
+            ? String(currentPlant.fertilizing_frequency_days)
+            : "",
         care_notes: currentPlant.care_notes || "",
       })
     }
@@ -63,18 +69,56 @@ export function EditPlantModal({ plant, open, onOpenChange, onSave }: EditPlantM
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (currentPlant) {
-      onSave({ id: currentPlant.id, ...formData })
+      const watering = Number.parseInt(formData.watering_frequency_days, 10)
+      const fertilizing = Number.parseInt(formData.fertilizing_frequency_days, 10)
+
+      if (!formData.sunlight_level) {
+        alert("Please select a sunlight level")
+        return
+      }
+      if (!Number.isFinite(watering) || watering < 1) {
+        alert("Please enter a valid watering frequency (days)")
+        return
+      }
+      if (!Number.isFinite(fertilizing) || fertilizing < 1) {
+        alert("Please enter a valid fertilizing frequency (days)")
+        return
+      }
+
+      onSave({
+        id: currentPlant.id,
+        name: formData.name,
+        species: formData.species,
+        location: formData.location,
+        sunlight_level: formData.sunlight_level as Plant["sunlight_level"],
+        watering_frequency_days: watering,
+        fertilizing_frequency_days: fertilizing,
+        care_notes: formData.care_notes,
+      })
+    }
+  }
+
+  const handleDialogInteractOutside = (e: Event) => {
+    const target = e.target as HTMLElement | null
+    if (!target) return
+
+    // Prevent the dialog from closing when interacting with portaled Radix Select content.
+    // Without this, clicking a Select option can count as an "outside" click for the dialog.
+    if (target.closest('[data-slot="select-content"]')) {
+      e.preventDefault()
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg" onInteractOutside={handleDialogInteractOutside}>
         <DialogHeader>
           <DialogTitle>Edit Plant</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-3">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Plant Details</div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
@@ -113,7 +157,7 @@ export function EditPlantModal({ plant, open, onOpenChange, onSave }: EditPlantM
                   setFormData({ ...formData, sunlight_level: value as Plant["sunlight_level"] })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select level" />
                 </SelectTrigger>
                 <SelectContent>
@@ -125,42 +169,45 @@ export function EditPlantModal({ plant, open, onOpenChange, onSave }: EditPlantM
               </Select>
             </div>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="watering">Water every (days)</Label>
-              <Input
-                id="watering"
-                type="number"
-                min="1"
-                value={formData.watering_frequency_days}
-                onChange={(e) =>
-                  setFormData({ ...formData, watering_frequency_days: Number.parseInt(e.target.value) || 7 })
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="fertilizing">Fertilize every (days)</Label>
-              <Input
-                id="fertilizing"
-                type="number"
-                min="1"
-                value={formData.fertilizing_frequency_days}
-                onChange={(e) =>
-                  setFormData({ ...formData, fertilizing_frequency_days: Number.parseInt(e.target.value) || 30 })
-                }
-              />
-            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="notes">Care Notes</Label>
-            <Textarea
-              id="notes"
-              placeholder="Any special care instructions..."
-              value={formData.care_notes}
-              onChange={(e) => setFormData({ ...formData, care_notes: e.target.value })}
-            />
+          <div className="space-y-3">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Care</div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="watering">Water every (days)</Label>
+                <Input
+                  id="watering"
+                  type="number"
+                  min="1"
+                  value={formData.watering_frequency_days}
+                  onChange={(e) => setFormData({ ...formData, watering_frequency_days: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fertilizing">Fertilize every (days)</Label>
+                <Input
+                  id="fertilizing"
+                  type="number"
+                  min="1"
+                  value={formData.fertilizing_frequency_days}
+                  onChange={(e) => setFormData({ ...formData, fertilizing_frequency_days: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Care Notes</Label>
+              <Textarea
+                id="notes"
+                placeholder="Any special care instructions..."
+                value={formData.care_notes}
+                onChange={(e) => setFormData({ ...formData, care_notes: e.target.value })}
+              />
+            </div>
           </div>
 
           {currentPlant && (

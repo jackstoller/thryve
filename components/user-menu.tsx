@@ -120,6 +120,7 @@ export function UserMenu() {
       <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
         <DialogContent
           className="sm:max-w-md"
+          onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <DialogHeader className="gap-0">
             <DialogTitle className="sr-only">Account</DialogTitle>

@@ -509,7 +509,14 @@ export function ImportSessionCard({
           {/* Plant Image */}
           {session.image_url && (
             <div className="w-20 h-20 rounded-xl overflow-hidden bg-muted shrink-0 ring-2 ring-border">
-              <img src={session.image_url || "/placeholder.svg"} alt="Plant" className="w-full h-full object-cover" />
+              <img
+                src={session.image_url || "/placeholder.svg"}
+                alt="Plant"
+                loading="lazy"
+                decoding="async"
+                fetchPriority="low"
+                className="w-full h-full object-cover"
+              />
             </div>
           )}
 

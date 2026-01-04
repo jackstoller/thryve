@@ -9,6 +9,7 @@ interface ImportSidebarProps {
   sessions: ImportSession[]
   open: boolean
   onClose: () => void
+  onReturnToGallery?: () => void
   onConfirm: (session: ImportSession) => void
   onCancel: (id: string) => void
   onCorrect?: (session: ImportSession) => void
@@ -20,6 +21,7 @@ export function ImportSidebar({
   sessions,
   open,
   onClose,
+  onReturnToGallery,
   onConfirm,
   onCancel,
   onCorrect,
@@ -42,11 +44,22 @@ export function ImportSidebar({
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/30 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/30">
+      <div className="px-4 pt-3 pb-2 border-b text-xs text-muted-foreground">
+        You can close this screen anytime—imports keep running in the background.
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 pb-24 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/30 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/30">
         {activeSessions.length === 0 ? (
           <div className="text-center py-12">
             <Leaf className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-muted-foreground">No plants being imported</p>
+
+            <Button
+              className="mt-6 bg-[var(--success-green)] text-white hover:bg-[var(--success-green)]/90"
+              onClick={() => (onReturnToGallery ? onReturnToGallery() : onClose())}
+            >
+              Return to Plant Gallery
+            </Button>
           </div>
         ) : (
           <div className="space-y-3">

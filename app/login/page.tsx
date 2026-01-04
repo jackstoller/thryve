@@ -33,13 +33,10 @@ export default function LoginPage() {
 
   return (
     <div className="h-full w-full flex items-center justify-center px-4 py-6">
-      <div className="w-full max-w-md space-y-4">
-        <div className="flex flex-col items-center justify-center text-center gap-2">
-          <Image src="/logo-square-transparent.png" alt="Thryve" width={96} height={96} priority />
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">Thryve</h1>
-            <p className="text-xs text-muted-foreground leading-none">Sign in to continue</p>
-          </div>
+      <div className="w-full max-w-md space-y-10">
+        <div className="flex flex-col items-center justify-center text-center gap-5">
+          <Image src="/logo-square-transparent.png" alt="Thryve" width={128} height={128} priority />
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight leading-none">Thryve</h1>
         </div>
 
         {errorText && (

@@ -10,8 +10,8 @@ import { format, isToday, isTomorrow, isPast, addDays, startOfDay } from "date-f
 
 interface ScheduleViewProps {
   plants: Plant[]
-  onWater: (id: string) => void
-  onFertilize: (id: string) => void
+  onWater: (id: string) => Promise<void>
+  onFertilize: (id: string) => Promise<void>
   onPlantClick: (plant: Plant) => void
 }
 
@@ -24,23 +24,51 @@ interface ScheduleItem {
 export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: ScheduleViewProps) {
   const [loadingAction, setLoadingAction] = useState<{ plantId: string; type: "water" | "fertilize" } | null>(null)
   const [daysToShow, setDaysToShow] = useState(7)
+  const today = startOfDay(new Date())
+  const futureDate = addDays(today, daysToShow)
+
   const scheduleItems: ScheduleItem[] = []
 
+  const parseDate = (value: string | null): Date | null => {
+    if (!value) return null
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+
+  const getInitialDueDate = (plant: Plant, type: "water" | "fertilize"): Date | null => {
+    if (type === "water") {
+      return parseDate(plant.next_water_date) ?? parseDate(plant.last_watered)
+    }
+    return parseDate(plant.next_fertilize_date) ?? parseDate(plant.last_fertilized)
+  }
+
+  const getFrequencyDays = (plant: Plant, type: "water" | "fertilize"): number => {
+    return type === "water" ? plant.watering_frequency_days : plant.fertilizing_frequency_days
+  }
+
   plants.forEach((plant) => {
-    if (plant.next_water_date) {
-      scheduleItems.push({
-        plant,
-        type: "water",
-        date: new Date(plant.next_water_date),
-      })
-    }
-    if (plant.next_fertilize_date) {
-      scheduleItems.push({
-        plant,
-        type: "fertilize",
-        date: new Date(plant.next_fertilize_date),
-      })
-    }
+    ;(["water", "fertilize"] as const).forEach((type) => {
+      const frequencyDays = getFrequencyDays(plant, type)
+      if (!Number.isFinite(frequencyDays) || frequencyDays <= 0) return
+
+      const initial = getInitialDueDate(plant, type)
+      if (!initial) return
+
+      const initialDueDate = startOfDay(initial)
+
+      // If the initial due date is already overdue, show only that single overdue task.
+      // (We intentionally do not generate a chain of future tasks until the overdue one is completed.)
+      if (initialDueDate < today) {
+        scheduleItems.push({ plant, type, date: initialDueDate })
+        return
+      }
+
+      let occurrence = initialDueDate
+      while (occurrence <= futureDate) {
+        scheduleItems.push({ plant, type, date: occurrence })
+        occurrence = addDays(occurrence, frequencyDays)
+      }
+    })
   })
 
   // Sort by date
@@ -48,21 +76,14 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
 
   // Group by date
   const groupedSchedule: Record<string, ScheduleItem[]> = {}
-  const today = startOfDay(new Date())
-  const futureDate = addDays(today, daysToShow)
 
-  scheduleItems
-    .filter((item) => item.date <= futureDate)
-    .forEach((item) => {
-      const dateKey = format(item.date, "yyyy-MM-dd")
-      if (!groupedSchedule[dateKey]) {
-        groupedSchedule[dateKey] = []
-      }
-      groupedSchedule[dateKey].push(item)
-    })
-
-  // Check if there are more items beyond the current view
-  const hasMoreItems = scheduleItems.some((item) => item.date > futureDate)
+  scheduleItems.forEach((item) => {
+    const dateKey = format(item.date, "yyyy-MM-dd")
+    if (!groupedSchedule[dateKey]) {
+      groupedSchedule[dateKey] = []
+    }
+    groupedSchedule[dateKey].push(item)
+  })
 
   const getDateLabel = (dateStr: string) => {
     const date = new Date(dateStr)
@@ -89,19 +110,34 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
 
   if (Object.keys(groupedSchedule).length === 0) {
     return (
-      <Card className="border-dashed">
-        <CardContent className="py-12 text-center">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
-              <CheckCircle2 className="w-7 h-7 text-green-600 dark:text-green-500" />
+      <div className="space-y-4 pb-4">
+        <Card className="border-dashed">
+          <CardContent className="py-12 text-center">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                <CheckCircle2 className="w-7 h-7 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-base mb-1 text-primary">All caught up!</h3>
+                <p className="text-muted-foreground text-sm">No care tasks scheduled for the next {daysToShow} days</p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-semibold text-base mb-1">All caught up!</h3>
-              <p className="text-muted-foreground text-sm">No care tasks scheduled for the next 7 days</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+
+        {/* Load More Button */}
+        <div className="flex justify-center pt-2">
+          <Button
+            variant="outline"
+            size="default"
+            onClick={() => setDaysToShow(daysToShow + 7)}
+            className="group active:border-primary/50 active:bg-primary/5 transition-all duration-200 active:scale-95"
+          >
+            <Calendar className="w-4 h-4 mr-2" />
+            Show more
+          </Button>
+        </div>
+      </div>
     )
   }
 
@@ -187,6 +223,9 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
                           <img
                             src={item.plant.image_url}
                             alt={item.plant.name}
+                            loading="lazy"
+                            decoding="async"
+                            fetchPriority="low"
                             className="w-full h-full object-cover"
                           />
                         </div>
@@ -277,19 +316,17 @@ export function ScheduleView({ plants, onWater, onFertilize, onPlantClick }: Sch
       })}
 
       {/* Load More Button */}
-      {hasMoreItems && (
-        <div className="flex justify-center pt-2">
-          <Button
-            variant="outline"
-            size="default"
-            onClick={() => setDaysToShow(daysToShow + 7)}
-            className="group active:border-primary/50 active:bg-primary/5 transition-all duration-200 active:scale-95"
-          >
-            <Calendar className="w-4 h-4 mr-2" />
-            Show Next 7 Days
-          </Button>
-        </div>
-      )}
+      <div className="flex justify-center pt-2">
+        <Button
+          variant="outline"
+          size="default"
+          onClick={() => setDaysToShow(daysToShow + 7)}
+          className="group active:border-primary/50 active:bg-primary/5 transition-all duration-200 active:scale-95"
+        >
+          <Calendar className="w-4 h-4 mr-2" />
+          Show more
+        </Button>
+      </div>
     </div>
   )
 }

@@ -1,10 +1,28 @@
 "use client"
 
-import { useState, useRef } from "react"
+import type { CSSProperties } from "react"
+
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Camera, Upload, X, GripVertical, Loader2 } from "lucide-react"
 import type { PlantPhoto } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 
 interface PlantPhotosManagerProps {
   plantId: string
@@ -12,15 +30,111 @@ interface PlantPhotosManagerProps {
   onPhotosChange: () => void
 }
 
+function SortablePhotoTile({
+  photo,
+  index,
+  isCover,
+  canDelete,
+  deleting,
+  onDelete,
+}: {
+  photo: PlantPhoto
+  index: number
+  isCover: boolean
+  canDelete: boolean
+  deleting: boolean
+  onDelete: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: photo.id,
+  })
+
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "relative group rounded-lg overflow-hidden border-2 transition-all",
+        isDragging ? "opacity-50" : "opacity-100",
+        isCover && "ring-2 ring-primary/50"
+      )}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <div className="aspect-square bg-muted">
+        <img
+          src={photo.url}
+          alt={`Plant photo ${index + 1}`}
+          loading="lazy"
+          decoding="async"
+          fetchPriority="low"
+          draggable={false}
+          onContextMenu={(e) => e.preventDefault()}
+          style={{ WebkitTouchCallout: "none" }}
+          className="w-full h-full object-cover select-none"
+        />
+      </div>
+
+      {/* Drag Handle */}
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-label="Drag to reorder"
+        className={cn(
+          "absolute top-2 left-2 bg-background/80 backdrop-blur-sm rounded p-1",
+          "touch-none",
+          "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+        )}
+        onClick={(e) => e.preventDefault()}
+      >
+        <GripVertical className="w-4 h-4 text-muted-foreground" />
+      </button>
+
+      {/* Primary Badge */}
+      {isCover && (
+        <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full font-medium">
+          Cover
+        </div>
+      )}
+
+      {/* Delete Button */}
+      {canDelete && (
+        <Button
+          size="icon"
+          variant="destructive"
+          className="absolute bottom-2 right-2 w-7 h-7 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={onDelete}
+          disabled={deleting}
+        >
+          {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+        </Button>
+      )}
+    </div>
+  )
+}
+
 export function PlantPhotosManager({ plantId, photos, onPhotosChange }: PlantPhotosManagerProps) {
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   const [uploading, setUploading] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
-  const sortedPhotos = [...photos].sort((a, b) => a.order - b.order)
+  const sortedPhotos = useMemo(() => [...photos].sort((a, b) => a.order - b.order), [photos])
+  const [localPhotos, setLocalPhotos] = useState<PlantPhoto[]>(sortedPhotos)
+
+  useEffect(() => {
+    setLocalPhotos(sortedPhotos)
+  }, [sortedPhotos])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } })
+  )
 
   const handleFileSelect = async (file: File) => {
     if (!file || !file.type.startsWith("image/")) return
@@ -85,38 +199,8 @@ export function PlantPhotosManager({ plantId, photos, onPhotosChange }: PlantPho
     }
   }
 
-  const handleDragStart = (index: number) => {
-    setDraggedIndex(index)
-  }
-
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault()
-    setDragOverIndex(index)
-  }
-
-  const handleDragLeave = () => {
-    setDragOverIndex(null)
-  }
-
-  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
-    e.preventDefault()
-    
-    if (draggedIndex === null || draggedIndex === dropIndex) {
-      setDraggedIndex(null)
-      setDragOverIndex(null)
-      return
-    }
-
-    // Reorder photos
-    const newPhotos = [...sortedPhotos]
-    const [draggedPhoto] = newPhotos.splice(draggedIndex, 1)
-    newPhotos.splice(dropIndex, 0, draggedPhoto)
-
-    // Update order values
-    const reorderedPhotos = newPhotos.map((photo, index) => ({
-      ...photo,
-      order: index,
-    }))
+  const persistReorder = async (nextPhotos: PlantPhoto[], previousPhotos: PlantPhoto[]) => {
+    const reorderedPhotos = nextPhotos.map((photo, index) => ({ ...photo, order: index }))
 
     try {
       const res = await fetch(`/api/plants/${plantId}/photos`, {
@@ -132,17 +216,23 @@ export function PlantPhotosManager({ plantId, photos, onPhotosChange }: PlantPho
 
       onPhotosChange()
     } catch (error) {
+      setLocalPhotos(previousPhotos)
       console.error("Failed to reorder photos:", error)
       alert(error instanceof Error ? error.message : "Failed to reorder photos")
-    } finally {
-      setDraggedIndex(null)
-      setDragOverIndex(null)
     }
   }
 
-  const handleDragEnd = () => {
-    setDraggedIndex(null)
-    setDragOverIndex(null)
+  const handleDragEnd = async ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return
+
+    const oldIndex = localPhotos.findIndex((p) => p.id === active.id)
+    const newIndex = localPhotos.findIndex((p) => p.id === over.id)
+    if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return
+
+    const previousPhotos = localPhotos
+    const nextPhotos = arrayMove(localPhotos, oldIndex, newIndex)
+    setLocalPhotos(nextPhotos)
+    await persistReorder(nextPhotos, previousPhotos)
   }
 
   return (
@@ -177,72 +267,37 @@ export function PlantPhotosManager({ plantId, photos, onPhotosChange }: PlantPho
         </div>
       </div>
 
-      {sortedPhotos.length === 0 ? (
+      {localPhotos.length === 0 ? (
         <div className="text-center py-8 border-2 border-dashed rounded-lg text-sm text-muted-foreground">
           No photos yet
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {sortedPhotos.map((photo, index) => (
-            <div
-              key={photo.id}
-              draggable
-              onDragStart={() => handleDragStart(index)}
-              onDragOver={(e) => handleDragOver(e, index)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, index)}
-              onDragEnd={handleDragEnd}
-              className={cn(
-                "relative group rounded-lg overflow-hidden border-2 transition-all cursor-move",
-                draggedIndex === index && "opacity-50",
-                dragOverIndex === index && "border-primary scale-105",
-                index === 0 && "ring-2 ring-primary/50"
-              )}
-            >
-              <div className="aspect-square bg-muted">
-                <img
-                  src={photo.url}
-                  alt={`Plant photo ${index + 1}`}
-                  className="w-full h-full object-cover"
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext items={localPhotos.map((p) => p.id)} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {localPhotos.map((photo, index) => (
+                <SortablePhotoTile
+                  key={photo.id}
+                  photo={photo}
+                  index={index}
+                  isCover={index === 0}
+                  canDelete={localPhotos.length > 1}
+                  deleting={deleting === photo.id}
+                  onDelete={() => handleDeletePhoto(photo.id)}
                 />
-              </div>
-              
-              {/* Drag Handle */}
-              <div className="absolute top-2 left-2 bg-background/80 backdrop-blur-sm rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <GripVertical className="w-4 h-4 text-muted-foreground" />
-              </div>
-
-              {/* Primary Badge */}
-              {index === 0 && (
-                <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full font-medium">
-                  Cover
-                </div>
-              )}
-
-              {/* Delete Button */}
-              {sortedPhotos.length > 1 && (
-                <Button
-                  size="icon"
-                  variant="destructive"
-                  className="absolute bottom-2 right-2 w-7 h-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => handleDeletePhoto(photo.id)}
-                  disabled={deleting === photo.id}
-                >
-                  {deleting === photo.id ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <X className="w-4 h-4" />
-                  )}
-                </Button>
-              )}
+              ))}
             </div>
-          ))}
-        </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       <p className="text-xs text-muted-foreground">
-        {sortedPhotos.length > 0 ? (
-          <>Drag photos to reorder. The first photo is your cover photo.</>
+        {localPhotos.length > 0 ? (
+          <>Drag the grip to reorder. The first photo is your cover photo.</>
         ) : (
           <>Add photos to document your plant's growth and progress.</>
         )}

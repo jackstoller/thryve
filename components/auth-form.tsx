@@ -84,13 +84,22 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <Button type="button" variant="outline" onClick={signInWithGoogle} disabled={isBusy} className="w-full">
         <Image src="/google.svg" alt="" width={16} height={16} className="mr-2" />
         Continue with Google
       </Button>
 
-      <div className="space-y-3">
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center" aria-hidden="true">
+          <span className="w-full border-t" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-background px-2 text-muted-foreground">or</span>
+        </div>
+      </div>
+
+      <div className="space-y-4">
         {mode === "sign-up" && (
           <div className="space-y-1.5">
             <Label htmlFor="fullName">Full name</Label>

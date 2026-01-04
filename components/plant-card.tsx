@@ -4,15 +4,14 @@ import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Droplets, Sun, Leaf, MapPin, MoreHorizontal, ChevronLeft, ChevronRight } from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Droplets, Sun, Leaf, MapPin, ChevronLeft, ChevronRight } from "lucide-react"
 import type { Plant } from "@/lib/types"
 import { formatDistanceToNow, isPast, isToday, differenceInDays } from "date-fns"
 
 interface PlantCardProps {
   plant: Plant
-  onWater: (id: string) => void
-  onFertilize: (id: string) => void
+  onWater: (id: string) => Promise<void>
+  onFertilize: (id: string) => Promise<void>
   onEdit: (plant: Plant) => void
   onDelete: (id: string) => void
   onClick: (plant: Plant) => void
@@ -42,14 +41,6 @@ export function PlantCard({ plant, onWater, onFertilize, onEdit, onDelete, onCli
     }
   }
 
-  const getWaterStatus = () => {
-    if (!plant.next_water_date) return { text: "Not scheduled", urgent: false }
-    const date = new Date(plant.next_water_date)
-    if (isPast(date) && !isToday(date)) return { text: "Overdue!", urgent: true }
-    if (isToday(date)) return { text: "Water today", urgent: true }
-    return { text: `In ${formatDistanceToNow(date)}`, urgent: false }
-  }
-
   const getWaterProgress = () => {
     if (!plant.last_watered || !plant.next_water_date) return 0
     const lastWatered = new Date(plant.last_watered)
@@ -59,7 +50,6 @@ export function PlantCard({ plant, onWater, onFertilize, onEdit, onDelete, onCli
     return Math.max(0, progress)
   }
 
-  const waterStatus = getWaterStatus()
   const waterProgress = getWaterProgress()
   
   // Get sorted photos or fallback to image_url
@@ -90,6 +80,9 @@ export function PlantCard({ plant, onWater, onFertilize, onEdit, onDelete, onCli
           <img
             src={currentPhoto}
             alt={plant.name}
+            loading="lazy"
+            decoding="async"
+            fetchPriority="low"
             className="object-cover w-full h-full group-active:scale-105 transition-transform duration-300"
           />
         ) : (
@@ -142,60 +135,6 @@ export function PlantCard({ plant, onWater, onFertilize, onEdit, onDelete, onCli
           </div>
         )}
 
-        {/* Progress Ring - Always visible on mobile */}
-        <div className="absolute bottom-2 right-2">
-          <div className="relative w-10 h-10">
-            <svg className="transform -rotate-90 w-10 h-10">
-              <circle
-                cx="20"
-                cy="20"
-                r="16"
-                stroke="currentColor"
-                strokeWidth="3"
-                fill="none"
-                className="text-white/20"
-              />
-              <circle
-                cx="20"
-                cy="20"
-                r="16"
-                stroke="currentColor"
-                strokeWidth="3"
-                fill="none"
-                strokeDasharray={`${2 * Math.PI * 16}`}
-                strokeDashoffset={`${2 * Math.PI * 16 * (1 - waterProgress / 100)}`}
-                className="text-[var(--water-blue)] transition-all duration-500"
-                strokeLinecap="round"
-              />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Droplets className="w-4 h-4 text-white drop-shadow" />
-            </div>
-          </div>
-        </div>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute top-2 right-2 h-8 w-8 bg-card/90 backdrop-blur-sm shadow-sm active:scale-95"
-            >
-              <MoreHorizontal className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(plant); }} className="active:bg-accent">
-              Edit plant
-            </DropdownMenuItem>
-            <DropdownMenuItem 
-              onClick={(e) => { e.stopPropagation(); onDelete(plant.id); }} 
-              className="text-destructive active:bg-destructive/10"
-            >
-              Delete plant
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
 
       <CardContent className="p-3">

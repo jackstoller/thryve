@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import useSWR, { mutate } from "swr"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -30,6 +30,19 @@ import {
 import type { Plant, CareHistoryItem } from "@/lib/types"
 import { format, formatDistanceToNow, isPast, isToday, differenceInDays } from "date-fns"
 
+const CONFETTI_VECTORS: Array<{ x: number; y: number; r: number; delay: number }> = [
+  { x: -20, y: -26, r: -18, delay: 0 },
+  { x: -8, y: -30, r: 10, delay: 20 },
+  { x: 6, y: -28, r: 24, delay: 40 },
+  { x: 18, y: -24, r: 38, delay: 10 },
+  { x: -24, y: -14, r: -34, delay: 60 },
+  { x: -14, y: -12, r: -10, delay: 80 },
+  { x: 14, y: -12, r: 12, delay: 70 },
+  { x: 26, y: -14, r: 30, delay: 50 },
+  { x: -18, y: -6, r: -22, delay: 90 },
+  { x: 18, y: -6, r: 20, delay: 100 },
+]
+
 const fetcher = async (url: string) => {
   const res = await fetch(url)
   return res.json()
@@ -39,8 +52,8 @@ interface PlantDetailDrawerProps {
   plant: Plant | null
   open: boolean
   onClose: () => void
-  onWater: (id: string) => void
-  onFertilize: (id: string) => void
+  onWater: (id: string) => Promise<void>
+  onFertilize: (id: string) => Promise<void>
   onEdit: (plant: Plant) => void
   onDelete: (id: string) => void
 }
@@ -56,6 +69,14 @@ export function PlantDetailDrawer({
 }: PlantDetailDrawerProps) {
   const [isMobile, setIsMobile] = useState(false)
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
+  const [loadingAction, setLoadingAction] = useState<"water" | "fertilize" | null>(null)
+
+  const [waterCelebrateKey, setWaterCelebrateKey] = useState(0)
+  const [fertilizeCelebrateKey, setFertilizeCelebrateKey] = useState(0)
+  const [waterPopping, setWaterPopping] = useState(false)
+  const [fertilizePopping, setFertilizePopping] = useState(false)
+  const waterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fertilizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { data: careHistory } = useSWR<CareHistoryItem[]>(
     plant ? `/api/plants/${plant.id}/history` : null,
@@ -73,6 +94,13 @@ export function PlantDetailDrawer({
     return () => window.removeEventListener("resize", checkMobile)
   }, [])
 
+  useEffect(() => {
+    return () => {
+      if (waterTimeoutRef.current) clearTimeout(waterTimeoutRef.current)
+      if (fertilizeTimeoutRef.current) clearTimeout(fertilizeTimeoutRef.current)
+    }
+  }, [])
+
   // Reset photo index when plant changes
   useEffect(() => {
     setCurrentPhotoIndex(0)
@@ -85,6 +113,21 @@ export function PlantDetailDrawer({
   const needsFertilizer =
     plant.next_fertilize_date &&
     (isPast(new Date(plant.next_fertilize_date)) || isToday(new Date(plant.next_fertilize_date)))
+
+  const triggerCelebrate = (kind: "water" | "fertilize") => {
+    if (kind === "water") {
+      setWaterCelebrateKey((k) => k + 1)
+      setWaterPopping(true)
+      if (waterTimeoutRef.current) clearTimeout(waterTimeoutRef.current)
+      waterTimeoutRef.current = setTimeout(() => setWaterPopping(false), 900)
+      return
+    }
+
+    setFertilizeCelebrateKey((k) => k + 1)
+    setFertilizePopping(true)
+    if (fertilizeTimeoutRef.current) clearTimeout(fertilizeTimeoutRef.current)
+    fertilizeTimeoutRef.current = setTimeout(() => setFertilizePopping(false), 900)
+  }
   
   // Get sorted photos or fallback
   const photos = plant.photos && plant.photos.length > 0 
@@ -147,14 +190,23 @@ export function PlantDetailDrawer({
   const fertilizerProgress = getFertilizerProgress()
 
   // Shared content component
-  const renderContent = (useDialogTitle: boolean = false) => (
-    <div className="overflow-y-auto max-h-[90vh] rounded-lg">
+  const renderContent = (useDialogTitle: boolean = false, fullScreen: boolean = false) => (
+    <div
+      className={
+        fullScreen
+          ? "overflow-y-auto h-full rounded-none"
+          : "overflow-y-auto max-h-[90vh] rounded-lg"
+      }
+    >
       {/* Photo Gallery with Carousel */}
       {photos.length > 0 ? (
         <div className="relative h-64 bg-muted group">
           <img 
             src={photos[currentPhotoIndex].url} 
             alt={`${plant.name} ${currentPhotoIndex + 1}`} 
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
             className="w-full h-full object-cover transition-opacity duration-300" 
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
@@ -266,30 +318,88 @@ export function PlantDetailDrawer({
       )}
 
       {/* Content */}
-      <div className="p-6 space-y-6">
+      <div className="p-6 pb-[calc(env(safe-area-inset-bottom)+6rem)] space-y-6">
           {/* Action Buttons */}
           <div className="flex gap-3">
             <Button
               variant="outline"
-              className="flex-1 bg-card/60 hover:bg-accent"
+              disabled={loadingAction !== null}
+              aria-busy={loadingAction === "water"}
+              className={`relative flex-1 bg-card/60 hover:bg-accent active:bg-accent active:opacity-80 transition-transform active:scale-[0.97] ${waterPopping ? "thryve-press-pop" : ""}`}
               onClick={async () => {
-                await onWater(plant.id)
-                mutate(`/api/plants/${plant.id}/history`)
+                setLoadingAction("water")
+                try {
+                  await onWater(plant.id)
+                  mutate(`/api/plants/${plant.id}/history`)
+                  triggerCelebrate("water")
+                } finally {
+                  setLoadingAction(null)
+                }
               }}
             >
+              {waterPopping && (
+                <span
+                  key={waterCelebrateKey}
+                  aria-hidden
+                  className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+                >
+                  {CONFETTI_VECTORS.map((v, i) => (
+                    <span
+                      // eslint-disable-next-line react/no-array-index-key
+                      key={i}
+                      className="thryve-confetti-piece"
+                      style={{
+                        ["--x" as any]: `${v.x}px`,
+                        ["--y" as any]: `${v.y}px`,
+                        ["--r" as any]: `${v.r}deg`,
+                        ["--delay" as any]: `${v.delay}ms`,
+                      }}
+                    />
+                  ))}
+                </span>
+              )}
               <Droplets className="w-4 h-4 mr-2 text-[var(--water-blue)]" />
-              {needsWater ? "Water Now" : "Mark Watered"}
+              {loadingAction === "water" ? "Watering…" : needsWater ? "Water Now" : "Mark Watered"}
             </Button>
             <Button
               variant="outline"
-              className="flex-1 bg-card/60 hover:bg-accent"
+              disabled={loadingAction !== null}
+              aria-busy={loadingAction === "fertilize"}
+              className={`relative flex-1 bg-card/60 hover:bg-accent active:bg-accent active:opacity-80 transition-transform active:scale-[0.97] ${fertilizePopping ? "thryve-press-pop" : ""}`}
               onClick={async () => {
-                await onFertilize(plant.id)
-                mutate(`/api/plants/${plant.id}/history`)
+                setLoadingAction("fertilize")
+                try {
+                  await onFertilize(plant.id)
+                  mutate(`/api/plants/${plant.id}/history`)
+                  triggerCelebrate("fertilize")
+                } finally {
+                  setLoadingAction(null)
+                }
               }}
             >
+              {fertilizePopping && (
+                <span
+                  key={fertilizeCelebrateKey}
+                  aria-hidden
+                  className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+                >
+                  {CONFETTI_VECTORS.map((v, i) => (
+                    <span
+                      // eslint-disable-next-line react/no-array-index-key
+                      key={i}
+                      className="thryve-confetti-piece"
+                      style={{
+                        ["--x" as any]: `${v.x}px`,
+                        ["--y" as any]: `${v.y}px`,
+                        ["--r" as any]: `${v.r}deg`,
+                        ["--delay" as any]: `${v.delay}ms`,
+                      }}
+                    />
+                  ))}
+                </span>
+              )}
               <Leaf className="w-4 h-4 mr-2 text-[var(--fertilizer-amber)]" />
-              {needsFertilizer ? "Feed Now" : "Mark Fed"}
+              {loadingAction === "fertilize" ? "Feeding…" : needsFertilizer ? "Feed Now" : "Mark Fed"}
             </Button>
           </div>
 
@@ -602,7 +712,7 @@ export function PlantDetailDrawer({
   const desktopModal = (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl sm:max-w-6xl max-h-[90vh] p-0 overflow-hidden border-0">
-        {renderContent(true)}
+        {renderContent(true, false)}
       </DialogContent>
     </Dialog>
   )
@@ -612,7 +722,7 @@ export function PlantDetailDrawer({
     <>
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity duration-300 ${
+        className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] transition-opacity duration-300 ${
           open ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
         onClick={onClose}
@@ -620,11 +730,11 @@ export function PlantDetailDrawer({
 
       {/* Drawer */}
       <div
-        className={`fixed top-0 right-0 h-full w-full bg-background shadow-2xl z-50 overflow-y-auto transform transition-transform duration-300 ease-out ${
+        className={`fixed top-0 right-0 h-full w-full bg-background shadow-2xl z-[70] overflow-hidden transform transition-transform duration-300 ease-out ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        {renderContent(false)}
+        {renderContent(false, true)}
       </div>
     </>
   )

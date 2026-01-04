@@ -14,13 +14,10 @@ interface HeaderProps {
 
 export function Header({ view, onViewChange, urgentCount }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-md border-b safe-top mb-3">
+    <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-md border-b safe-top">
       <div className="px-4 py-3">
         <div className="flex items-center justify-between">
-          <button 
-            onClick={() => onViewChange("grid")}
-            className="flex items-center gap-2.5 hover:opacity-80 transition-opacity active:scale-95"
-          >
+          <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden">
               <Image
                 src="/logo-square-transparent.png"
@@ -33,7 +30,7 @@ export function Header({ view, onViewChange, urgentCount }: HeaderProps) {
             <div className="text-start">
               <h1 className="text-lg font-bold tracking-tight font-title">Thryve</h1>
             </div>
-          </button>
+          </div>
 
           <div className="flex items-center gap-2">
             <UserMenu />
