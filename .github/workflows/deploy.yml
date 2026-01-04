@@ -15,8 +15,9 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -euo pipefail
             cd /opt/docker/thryve
-            git pull origin main
+            git pull origin main || { echo "ERROR: git pull failed (repo not updated). Fix the working tree on the server and re-run."; exit 1; }
             
             # Stop and remove containers properly
             sudo docker compose down
