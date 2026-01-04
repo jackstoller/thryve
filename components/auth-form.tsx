@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -85,6 +86,7 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
   return (
     <div className="space-y-4">
       <Button type="button" variant="outline" onClick={signInWithGoogle} disabled={isBusy} className="w-full">
+        <Image src="/google.svg" alt="" width={16} height={16} className="mr-2" />
         Continue with Google
       </Button>
 
