@@ -17,6 +17,19 @@ jobs:
           script: |
             cd /opt/docker/thryve
             git pull origin main
-            sudo docker-compose build web
-            sudo docker-compose up -d web
+            
+            # Stop and remove containers properly
+            sudo docker compose down
+            
+            # Remove any ghost containers
+            sudo docker container prune -f
+            
+            # Build and start
+            sudo docker compose build web
+            sudo docker compose up -d
+            
+            # Cleanup old images
             sudo docker image prune -f
+            
+            # Verify it's running
+            sudo docker compose ps
